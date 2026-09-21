@@ -9,12 +9,16 @@ import {
   $,
   esc,
   flatGames,
-  badge
+  badge,
+  showNotification,
+  notifyDataChanged
 } from "./utils.js";
 
 import {
   openModal,
-  closeModal
+  closeModal,
+  showCenterAlert,
+  showCenterConfirm
 } from "./modals.js";
 
 
@@ -88,7 +92,23 @@ export function renderTasks() {
           </td>
 
           <td>
-            ${esc(task.ticket || "—")}
+
+            ${
+              task.ticket
+                ? `
+                  <a
+                    href="${esc(task.ticket)}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="task-ticket-link"
+                    title="Open ticket"
+                  >
+                    ${esc(task.ticket)}
+                  </a>
+                `
+                : "—"
+            }
+
           </td>
 
           <td>
@@ -105,21 +125,29 @@ export function renderTasks() {
 
           <td>
 
-            <button
-              class="link edit-task"
-              data-id="${task.id}"
-            >
-              Edit
-            </button>
+            <div class="iconBtns">
 
-            ·
+              <button
+                type="button"
+                class="iconBtn edit-task"
+                data-id="${esc(task.id)}"
+                title="Edit"
+                aria-label="Edit Task"
+              >
+                <i class="fa-solid fa-pen"></i>
+              </button>
 
-            <button
-              class="link danger delete-task"
-              data-id="${task.id}"
-            >
-              Delete
-            </button>
+              <button
+                type="button"
+                class="iconBtn danger delete-task"
+                data-id="${esc(task.id)}"
+                title="Delete"
+                aria-label="Delete Task"
+              >
+                <i class="fa-solid fa-trash"></i>
+              </button>
+
+            </div>
 
           </td>
 
@@ -220,10 +248,32 @@ export function openTask(
       .join("");
 
 
+  /*
+   * Existing task member takes
+   * priority when editing.
+   *
+   * When Dashboard opens
+   * "Add Task" for a specific
+   * member, selectedMember is used.
+   */
+
   $("memberField").value =
     task?.member ||
+    selectedMember ||
     members[0] ||
     "";
+
+
+  /*
+   * Lock the member field when
+   * adding from a member card.
+   *
+   * Editing an existing task
+   * keeps the field editable.
+   */
+
+  $("memberField").disabled =
+    !task && !!selectedMember;
 
 
   $("taskField").value =
@@ -286,7 +336,7 @@ export function editTask(id) {
    DELETE TASK
 ========================= */
 
-export function deleteTask(id) {
+export async function deleteTask(id) {
 
   const task =
     tasks.find(
@@ -299,9 +349,15 @@ export function deleteTask(id) {
   }
 
 
+  /*
+   * Use the centered confirmation
+   * modal instead of browser confirm().
+   */
+
   const confirmed =
-    confirm(
-      `Delete "${task.task}"?`
+    await showCenterConfirm(
+      `Delete "${task.task}"?`,
+      "Delete Task"
     );
 
 
@@ -323,7 +379,23 @@ export function deleteTask(id) {
 
   saveData();
 
+
+  /*
+   * Refresh all dependent views
+   * immediately.
+   */
+
+  notifyDataChanged();
+
+
   renderTasks();
+
+
+  showNotification(
+    `"${task.task}" has been deleted.`,
+    "success",
+    "Task deleted"
+  );
 
 }
 
@@ -337,13 +409,21 @@ export function setupTaskForm() {
   $("taskForm")
     .addEventListener(
       "submit",
-      event => {
+      async event => {
 
         event.preventDefault();
 
 
+        const existingId =
+          $("taskId").value;
+
+
+        const isEditing =
+          Boolean(existingId);
+
+
         const id =
-          $("taskId").value ||
+          existingId ||
           Date.now().toString();
 
 
@@ -390,6 +470,36 @@ export function setupTaskForm() {
         };
 
 
+        /*
+         * Task name validation.
+         */
+
+        if (!task.task) {
+
+          await showCenterAlert(
+            "Please enter a task name.",
+            "Invalid Task"
+          );
+
+          return;
+        }
+
+
+        /*
+         * Member validation.
+         */
+
+        if (!task.member) {
+
+          await showCenterAlert(
+            "Please select a member.",
+            "Invalid Member"
+          );
+
+          return;
+        }
+
+
         const validGame =
           flatGames(games)
             .some(
@@ -403,8 +513,9 @@ export function setupTaskForm() {
 
         if (!validGame) {
 
-          alert(
-            "Please select a game from the game list."
+          await showCenterAlert(
+            "Please select a game from the game list.",
+            "Invalid Game"
           );
 
           return;
@@ -430,9 +541,31 @@ export function setupTaskForm() {
 
         saveData();
 
+
         closeModal("taskModal");
 
+
+        /*
+         * Refresh Dashboard,
+         * Tasks, Members and Games
+         * immediately.
+         */
+
+        notifyDataChanged();
+
+
         renderTasks();
+
+
+        showNotification(
+          isEditing
+            ? "Task changes have been saved."
+            : "New task has been added.",
+          "success",
+          isEditing
+            ? "Task updated"
+            : "Task added"
+        );
 
       }
     );
@@ -565,3 +698,4 @@ export function setupGameSuggestions() {
   );
 
 }
+

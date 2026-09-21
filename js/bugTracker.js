@@ -1,4 +1,29 @@
-import { $ } from "./utils.js";
+import {
+  games
+} from "./storage.js";
+
+import {
+  $,
+  flatGames,
+  showNotification
+} from "./utils.js";
+
+import {
+  renderDashboard
+} from "./dashboard.js";
+
+import {
+  renderTasks
+} from "./tasks.js";
+
+import {
+  renderMembers
+} from "./members.js";
+
+import {
+  renderGames
+} from "./games.js";
+
 
 let bugs = [];
 let filteredBugs = [];
@@ -14,53 +39,436 @@ const STORAGE_KEY = "qa_bug_tracker";
 ========================================================= */
 
 function normalize(value) {
+
   return String(value ?? "")
     .trim()
     .replace(/\s+/g, " ");
+
 }
 
 
 function normalizeKey(value) {
-  return normalize(value).toLowerCase();
+
+  return normalize(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 }
 
 
 /* =========================================================
-   EXTRACT TICKET ID FROM URL
+   NORMALIZE IMPORT HEADER
 ========================================================= */
 
-function extractTicketId(ticketUrl) {
+function normalizeHeader(value) {
 
-  const url =
-    normalize(ticketUrl);
+  return normalize(value)
+    .toLowerCase()
+    .replace(/[\s_\-./\\]+/g, "");
 
-  if (!url) {
-    return "";
+}
+
+
+/* =========================================================
+   CHECK URL
+========================================================= */
+
+function isUrl(value) {
+
+  const text =
+    normalize(value);
+
+  return (
+    /^https?:\/\//i.test(text) ||
+    /^www\./i.test(text)
+  );
+
+}
+
+
+/* =========================================================
+   REAL-TIME UI REFRESH
+========================================================= */
+
+function refreshAllViews() {
+
+  if ($("dashboard")) {
+    renderDashboard();
   }
 
-  /*
-    Example:
+  if ($("tasks")) {
+    renderTasks();
+  }
 
-    https://gitlab.ntt.lan/game/bingo/bingo-pilipino/-/issues/468
+  if ($("team")) {
+    renderMembers();
+  }
 
-    Result:
-    468
+  if ($("games")) {
+    renderGames();
+  }
 
-    The URL itself is NOT modified.
-  */
+  renderBugTracker();
 
-  const match =
-    url.match(
-      /\/([^/?#]+)\/?(?:[?#].*)?$/
+}
+
+
+/* =========================================================
+   CENTER MODAL
+========================================================= */
+
+function showCenterModal({
+  title = "Confirmation",
+  message = "",
+  type = "confirm",
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  onConfirm = null
+} = {}) {
+
+  const existing =
+    document.getElementById(
+      "centerActionModal"
     );
 
-  if (!match) {
+  if (existing) {
+    existing.remove();
+  }
+
+
+  const iconMap = {
+
+    confirm:
+      "fa-triangle-exclamation",
+
+    warning:
+      "fa-triangle-exclamation",
+
+    error:
+      "fa-circle-xmark",
+
+    info:
+      "fa-circle-info"
+
+  };
+
+
+  const modal =
+    document.createElement("div");
+
+
+  modal.id =
+    "centerActionModal";
+
+
+  modal.className =
+    "modal center-action-modal show";
+
+
+  modal.innerHTML = `
+
+    <div
+      class="modalCard center-action-card"
+    >
+
+      <div
+        class="center-action-icon ${escapeHTML(
+          type
+        )}"
+      >
+
+        <i class="fa-solid ${
+          iconMap[type] ||
+          iconMap.confirm
+        }"></i>
+
+      </div>
+
+
+      <h3>
+        ${escapeHTML(title)}
+      </h3>
+
+
+      <p class="center-action-message">
+        ${escapeHTML(message)}
+      </p>
+
+
+      <div class="modalActions">
+
+        <button
+          type="button"
+          class="btn"
+          data-center-cancel
+        >
+          ${escapeHTML(cancelText)}
+        </button>
+
+
+        ${
+          type === "info"
+            ? ""
+            : `
+              <button
+                type="button"
+                class="btn danger"
+                data-center-confirm
+              >
+                ${escapeHTML(confirmText)}
+              </button>
+            `
+        }
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  document.body.appendChild(
+    modal
+  );
+
+
+  const close = () => {
+
+    modal.classList.remove(
+      "show"
+    );
+
+    setTimeout(
+      () => modal.remove(),
+      150
+    );
+
+  };
+
+
+  modal
+    .querySelector(
+      "[data-center-cancel]"
+    )
+    ?.addEventListener(
+      "click",
+      close
+    );
+
+
+  modal
+    .querySelector(
+      "[data-center-confirm]"
+    )
+    ?.addEventListener(
+      "click",
+      () => {
+
+        close();
+
+        if (
+          typeof onConfirm ===
+          "function"
+        ) {
+
+          onConfirm();
+
+        }
+
+      }
+    );
+
+
+  modal.addEventListener(
+    "click",
+    event => {
+
+      if (
+        event.target ===
+        modal
+      ) {
+
+        close();
+
+      }
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   EXTRACT TICKET ID
+========================================================= */
+
+function extractTicketId(value) {
+
+  const raw =
+    normalize(value);
+
+  if (!raw) {
     return "";
   }
 
+
+  /*
+    Supported examples:
+
+    468
+    #468
+    BUG-468
+
+    https://gitlab.example.com/issues/468
+    https://example.com/ticket/468
+  */
+
+
+  let cleaned =
+    raw.replace(
+      /^#/,
+      ""
+    );
+
+
+  if (
+    isUrl(cleaned)
+  ) {
+
+    try {
+
+      const url =
+        new URL(
+          cleaned.startsWith("www.")
+            ? `https://${cleaned}`
+            : cleaned
+        );
+
+
+      const segments =
+        url.pathname
+          .split("/")
+          .filter(Boolean);
+
+
+      if (
+        segments.length > 0
+      ) {
+
+        const lastSegment =
+          normalize(
+            segments[
+              segments.length - 1
+            ]
+          ).replace(
+            /^#/,
+            ""
+          );
+
+
+        /*
+          Handles:
+          /issues/468
+          /issues/468/
+          /issues/468?foo=bar
+        */
+
+        const numeric =
+          lastSegment.match(
+            /^(\d+)$/
+          );
+
+        if (numeric) {
+          return numeric[1];
+        }
+
+
+        /*
+          Handles:
+          BUG-468
+          BUG_468
+          Ticket-468
+        */
+
+        const issueNumber =
+          lastSegment.match(
+            /(\d+)$/
+          );
+
+        if (issueNumber) {
+          return issueNumber[1];
+        }
+
+
+        return lastSegment;
+
+      }
+
+    } catch (error) {
+
+      /*
+        Fall back to string parsing
+        if URL construction fails.
+      */
+
+    }
+
+  }
+
+
+  const hashMatch =
+    cleaned.match(
+      /#(\d+)\s*$/
+    );
+
+  if (hashMatch) {
+    return hashMatch[1];
+  }
+
+
+  /*
+    BUG-468
+    BUG_468
+    Ticket-468
+  */
+
+  const suffixNumberMatch =
+    cleaned.match(
+      /(?:^|[-_\s])(\d+)\s*$/
+    );
+
+  if (suffixNumberMatch) {
+    return suffixNumberMatch[1];
+  }
+
+
+  const numericMatch =
+    cleaned.match(
+      /\/(\d+)\/?(?:[?#].*)?$/
+    );
+
+  if (numericMatch) {
+    return numericMatch[1];
+  }
+
+
+  const lastPart =
+    cleaned
+      .split("/")
+      .pop()
+      ?.split("?")[0]
+      ?.split("#")[0];
+
+
   return normalize(
-    match[1]
+    lastPart
+  ).replace(
+    /^#/,
+    ""
   );
+
 }
 
 
@@ -70,39 +478,157 @@ function extractTicketId(ticketUrl) {
 
 function getTicketId(bug) {
 
-  /*
-    Ticket ID is now automatically
-    generated from Ticket URL.
+  if (!bug) {
+    return "";
+  }
 
-    Existing old records that still
-    contain ticketId are supported so
-    previously imported data does not
-    immediately break.
-  */
 
-  if (bug.ticketUrl) {
+  if (
+    bug.ticketId
+  ) {
+
+    return normalize(
+      bug.ticketId
+    ).replace(
+      /^#/,
+      ""
+    );
+
+  }
+
+
+  if (
+    bug.ticketUrl
+  ) {
 
     const extractedId =
       extractTicketId(
         bug.ticketUrl
       );
 
+
     if (extractedId) {
       return extractedId;
     }
+
   }
 
 
-  /*
-    Backward compatibility for
-    previously saved records.
-  */
   return normalize(
-    bug.ticketId ||
     bug["Ticket ID"] ||
     bug.ticket ||
     bug.id
+  ).replace(
+    /^#/,
+    ""
   );
+
+}
+
+
+/* =========================================================
+   FIND VALUE FROM IMPORTED ROW
+========================================================= */
+
+function getRowValue(
+  row,
+  aliases = []
+) {
+
+  const keys =
+    Object.keys(
+      row || {}
+    );
+
+
+  const normalizedAliases =
+    aliases.map(
+      alias =>
+        normalizeHeader(
+          alias
+        )
+    );
+
+
+  const matchingKey =
+    keys.find(
+      key =>
+        normalizedAliases.includes(
+          normalizeHeader(
+            key
+          )
+        )
+    );
+
+
+  if (
+    matchingKey !==
+    undefined
+  ) {
+
+    const value =
+      row[matchingKey];
+
+
+    if (
+      value !==
+      undefined &&
+      value !==
+      null
+    ) {
+
+      return value;
+
+    }
+
+  }
+
+
+  return "";
+
+}
+
+
+/* =========================================================
+   FIND GAME CATEGORY
+========================================================= */
+
+function getGameCategory(
+  gameName
+) {
+
+  const name =
+    normalize(
+      gameName
+    );
+
+
+  if (!name) {
+    return "";
+  }
+
+
+  const gameList =
+    flatGames(
+      games
+    );
+
+
+  const match =
+    gameList.find(
+      game =>
+        normalizeKey(
+          game.name
+        ) ===
+        normalizeKey(
+          name
+        )
+    );
+
+
+  return match?.category ||
+    "";
+
 }
 
 
@@ -110,123 +636,320 @@ function getTicketId(bug) {
    NORMALIZE BUG
 ========================================================= */
 
+/*
+  Canonical bug field order:
+
+  1. Build
+  2. Ticket URL
+  3. Game
+  4. Category
+  5. Bug Title
+  6. Priority
+  7. Date Created
+  8. Status
+  9. Created By
+  10. Validated By
+  11. Remarks
+
+  ticketId is kept internally at the end
+  for duplicate detection and ticket actions.
+*/
+
 function normalizeBug(row) {
 
-  const ticketUrl =
+  if (!row) {
+    return {};
+  }
+
+
+  /* =======================================================
+     BUILD
+  ======================================================= */
+
+  const build =
     normalize(
-      row.ticketUrl ||
-      row["Ticket URL"] ||
-      row.ticketURL ||
-      row.url ||
-      row.URL ||
-      row.link ||
-      row.Link
+      getRowValue(
+        row,
+        [
+          "Build",
+          "build"
+        ]
+      )
     );
 
 
+  /* =======================================================
+     TICKET URL
+  ======================================================= */
+
+  const rawTicketUrl =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Ticket URL",
+          "TicketURL",
+          "ticketUrl",
+          "ticket url",
+          "URL",
+          "Url",
+          "Link",
+          "Ticket Link"
+        ]
+      )
+    );
+
+
+  /* =======================================================
+     TICKET ID
+  ======================================================= */
+
+  const rawTicketId =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Ticket ID",
+          "TicketID",
+          "ticketId",
+          "ticket id",
+          "Ticket Number",
+          "TicketNumber",
+          "Ticket No",
+          "TicketNo",
+          "Ticket",
+          "ID"
+        ]
+      )
+    );
+
+
+  /*
+    If Ticket ID itself contains a URL,
+    preserve that URL so the ticket
+    remains clickable.
+  */
+
+  const ticketUrl =
+    rawTicketUrl ||
+    (
+      isUrl(
+        rawTicketId
+      )
+        ? rawTicketId
+        : ""
+    );
+
+
+  const ticketId =
+    extractTicketId(
+      rawTicketId
+    ) ||
+    extractTicketId(
+      ticketUrl
+    );
+
+
+  /* =======================================================
+     GAME
+  ======================================================= */
+
+  const game =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Game",
+          "Games",
+          "game",
+          "games"
+        ]
+      )
+    );
+
+
+  /* =======================================================
+     CATEGORY
+  ======================================================= */
+
+  const importedCategory =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Category",
+          "category",
+          "Game Category",
+          "GameCategory"
+        ]
+      )
+    );
+
+
+  const category =
+    importedCategory ||
+    getGameCategory(
+      game
+    );
+
+
+  /* =======================================================
+     BUG TITLE
+  ======================================================= */
+
+  const bugTitle =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Bug Title",
+          "BugTitle",
+          "Title",
+          "bugTitle",
+          "Bug"
+        ]
+      )
+    );
+
+
+  /* =======================================================
+     PRIORITY
+  ======================================================= */
+
+  const priority =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Priority",
+          "priority"
+        ]
+      )
+    );
+
+
+  /* =======================================================
+     DATE CREATED
+  ======================================================= */
+
+  const dateCreated =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Date Created",
+          "DateCreated",
+          "Created Date",
+          "CreatedDate",
+          "dateCreated"
+        ]
+      )
+    );
+
+
+  /* =======================================================
+     STATUS
+  ======================================================= */
+
+  const status =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Status",
+          "status"
+        ]
+      )
+    );
+
+
+  /* =======================================================
+     CREATED BY
+  ======================================================= */
+
+  const createdBy =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Created By",
+          "CreatedBy",
+          "createdBy"
+        ]
+      )
+    );
+
+
+  /* =======================================================
+     VALIDATED BY
+  ======================================================= */
+
+  const validatedBy =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Validated By",
+          "ValidatedBy",
+          "validatedBy"
+        ]
+      )
+    );
+
+
+  /* =======================================================
+     REMARKS
+  ======================================================= */
+
+  const remarks =
+    normalize(
+      getRowValue(
+        row,
+        [
+          "Remarks",
+          "Remark",
+          "remarks"
+        ]
+      )
+    );
+
+
+  /* =======================================================
+     RETURN
+  ======================================================= */
+
   return {
 
-    game: normalize(
-      row.game ||
-      row.Game
-    ),
+    build,
 
-    build: normalize(
-      row.build ||
-      row.Build
-    ),
+    ticketUrl,
 
-    /*
-      Ticket ID is automatically
-      derived from Ticket URL.
-    */
-    ticketId:
-      extractTicketId(
-        ticketUrl
-      ) ||
-      normalize(
-        row.ticketId ||
-        row["Ticket ID"] ||
-        row.ticket ||
-        row.id
-      ),
+    game,
+
+    category,
+
+    bugTitle,
+
+    priority,
+
+    dateCreated,
+
+    status,
+
+    createdBy,
+
+    validatedBy,
+
+    remarks,
 
     /*
-      Keep the ORIGINAL URL.
-      Do not modify or normalize
-      the actual URL structure.
+      Internal only.
+      Not displayed as a separate column.
     */
-    ticketUrl: ticketUrl,
+    ticketId
 
-    product: normalize(
-      row.product ||
-      row.Product
-    ),
-
-    bugTitle: normalize(
-      row.bugTitle ||
-      row["Bug Title"] ||
-      row.title ||
-      row.Title
-    ),
-
-    priority: normalize(
-      row.priority ||
-      row.Priority
-    ),
-
-    dateCreated: normalize(
-      row.dateCreated ||
-      row["Date Created"]
-    ),
-
-    status: normalize(
-      row.status ||
-      row.Status
-    ),
-
-    environment: normalize(
-      row.environment ||
-      row.Environment
-    ),
-
-    deviceBrowser: normalize(
-      row.deviceBrowser ||
-      row["Device/Browser"] ||
-      row.device ||
-      row.browser
-    ),
-
-    createdBy: normalize(
-      row.createdBy ||
-      row["Created By"]
-    ),
-
-    assignedTo: normalize(
-      row.assignedTo ||
-      row["Assigned To"]
-    ),
-
-    validatedBy: normalize(
-      row.validatedBy ||
-      row["Validated By"]
-    ),
-
-    fixedBuild: normalize(
-      row.fixedBuild ||
-      row["Fixed Build"]
-    ),
-
-    dateResolved: normalize(
-      row.dateResolved ||
-      row["Date Resolved"]
-    ),
-
-    remarks: normalize(
-      row.remarks ||
-      row.Remarks
-    )
   };
+
 }
 
 
@@ -243,11 +966,13 @@ function loadBugs() {
         STORAGE_KEY
       );
 
+
     if (!saved) {
 
       bugs = [];
 
       return;
+
     }
 
 
@@ -273,6 +998,7 @@ function loadBugs() {
     } else {
 
       bugs = [];
+
     }
 
   } catch (error) {
@@ -283,7 +1009,9 @@ function loadBugs() {
     );
 
     bugs = [];
+
   }
+
 }
 
 
@@ -295,15 +1023,17 @@ function saveBugs() {
       bugs
     )
   );
+
 }
 
 
 /* =========================================================
    DUPLICATE CONTROL
-   Ticket ID comes from Ticket URL.
 ========================================================= */
 
-function deduplicateBugs(list) {
+function deduplicateBugs(
+  list
+) {
 
   const unique =
     new Map();
@@ -326,9 +1056,10 @@ function deduplicateBugs(list) {
 
       /*
         If there is no Ticket ID,
-        keep the row but do not use
-        an empty Ticket ID as the key.
+        preserve the record with a
+        temporary unique key.
       */
+
       if (!ticketId) {
 
         unique.set(
@@ -337,6 +1068,7 @@ function deduplicateBugs(list) {
         );
 
         return;
+
       }
 
 
@@ -347,9 +1079,9 @@ function deduplicateBugs(list) {
 
 
       /*
-        Ticket ID already exists:
-        keep the FIRST record.
+        First record wins.
       */
+
       if (
         !unique.has(
           key
@@ -360,6 +1092,7 @@ function deduplicateBugs(list) {
           key,
           bug
         );
+
       }
 
     }
@@ -369,6 +1102,7 @@ function deduplicateBugs(list) {
   return Array.from(
     unique.values()
   );
+
 }
 
 
@@ -376,9 +1110,13 @@ function deduplicateBugs(list) {
    IMPORT
 ========================================================= */
 
-async function importFile(file) {
+async function importFile(
+  file
+) {
 
-  if (!file) return;
+  if (!file) {
+    return;
+  }
 
 
   try {
@@ -393,6 +1131,10 @@ async function importFile(file) {
     let importedRows = [];
 
 
+    /* =====================================================
+       JSON
+    ===================================================== */
+
     if (
       extension === "json"
     ) {
@@ -402,7 +1144,14 @@ async function importFile(file) {
           file
         );
 
-    } else if (
+    }
+
+
+    /* =====================================================
+       CSV
+    ===================================================== */
+
+    else if (
       extension === "csv"
     ) {
 
@@ -411,9 +1160,49 @@ async function importFile(file) {
           file
         );
 
-    } else if (
+    }
+
+
+    /* =====================================================
+       TSV
+    ===================================================== */
+
+    else if (
+      extension === "tsv"
+    ) {
+
+      importedRows =
+        await readTSV(
+          file
+        );
+
+    }
+
+
+    /* =====================================================
+       TXT
+    ===================================================== */
+
+    else if (
+      extension === "txt"
+    ) {
+
+      importedRows =
+        await readTXT(
+          file
+        );
+
+    }
+
+
+    /* =====================================================
+       EXCEL
+    ===================================================== */
+
+    else if (
       extension === "xlsx" ||
-      extension === "xls"
+      extension === "xls" ||
+      extension === "slxc"
     ) {
 
       importedRows =
@@ -421,15 +1210,55 @@ async function importFile(file) {
           file
         );
 
-    } else {
-
-      alert(
-        "Unsupported file type."
-      );
-
-      return;
     }
 
+
+    /* =====================================================
+       DOCX
+    ===================================================== */
+
+    else if (
+      extension === "docx"
+    ) {
+
+      importedRows =
+        await readDOCX(
+          file
+        );
+
+    }
+
+
+    /* =====================================================
+       UNSUPPORTED
+    ===================================================== */
+
+    else {
+
+      showCenterModal({
+
+        title:
+          "Unsupported File",
+
+        message:
+          "Please select an XLSX, XLS, SLXC, CSV, TSV, TXT, JSON, or DOCX file.",
+
+        type:
+          "error",
+
+        cancelText:
+          "Close"
+
+      });
+
+      return;
+
+    }
+
+
+    /* =====================================================
+       NO DATA
+    ===================================================== */
 
     if (
       !Array.isArray(
@@ -438,41 +1267,73 @@ async function importFile(file) {
       importedRows.length === 0
     ) {
 
-      alert(
-        "No bug records were found in the imported file."
-      );
+      showCenterModal({
+
+        title:
+          "No Bug Records",
+
+        message:
+          "No bug records were found in the imported file. Make sure the first row contains the column headers.",
+
+        type:
+          "warning",
+
+        cancelText:
+          "Close"
+
+      });
 
       return;
+
     }
 
 
-    /*
-      Normalize imported rows.
+    /* =====================================================
+       NORMALIZE IMPORTED DATA
+    ===================================================== */
 
-      Ticket ID is generated
-      automatically from Ticket URL.
-    */
     const normalizedImported =
       importedRows
         .map(
           normalizeBug
         )
         .filter(
-          bug => {
-
-            return (
-              bug.ticketUrl ||
-              bug.ticketId ||
-              bug.bugTitle
-            );
-
-          }
+          bug =>
+            bug.ticketId ||
+            bug.ticketUrl ||
+            bug.bugTitle
         );
 
 
-    /*
-      Count existing Ticket IDs.
-    */
+    if (
+      normalizedImported.length === 0
+    ) {
+
+      showCenterModal({
+
+        title:
+          "Invalid Import",
+
+        message:
+          "The imported file does not contain usable bug records. Expected columns include Build, Ticket URL, Game, Category, Bug Title, Priority, Date Created, Status, Created By, Validated By, and Remarks.",
+
+        type:
+          "error",
+
+        cancelText:
+          "Close"
+
+      });
+
+      return;
+
+    }
+
+
+    /* =====================================================
+       EXISTING TICKETS
+    ===================================================== */
+
     const existingTicketIds =
       new Set(
 
@@ -491,24 +1352,22 @@ async function importFile(file) {
       );
 
 
-    /*
-      Merge existing + imported records.
+    /* =====================================================
+       REMOVE DUPLICATES FROM IMPORT
+    ===================================================== */
 
-      Ticket number controls
-      duplicate checking.
-    */
-    const mergedBugs =
-      deduplicateBugs([
-        ...bugs,
-        ...normalizedImported
-      ]);
+    const importedUnique =
+      deduplicateBugs(
+        normalizedImported
+      );
 
 
-    /*
-      Calculate new unique tickets.
-    */
+    /* =====================================================
+       COUNT NEW TICKETS
+    ===================================================== */
+
     const newTicketCount =
-      mergedBugs.filter(
+      importedUnique.filter(
         bug => {
 
           const ticketId =
@@ -517,12 +1376,14 @@ async function importFile(file) {
             );
 
 
-          return (
-            ticketId &&
-            !existingTicketIds.has(
-              normalizeKey(
-                ticketId
-              )
+          if (!ticketId) {
+            return true;
+          }
+
+
+          return !existingTicketIds.has(
+            normalizeKey(
+              ticketId
             )
           );
 
@@ -530,24 +1391,53 @@ async function importFile(file) {
       ).length;
 
 
+    const duplicateCount =
+      normalizedImported.length -
+      importedUnique.length;
+
+
+    /* =====================================================
+       MERGE
+    ===================================================== */
+
     bugs =
-      mergedBugs;
+      deduplicateBugs([
+        ...bugs,
+        ...importedUnique
+      ]);
 
 
     saveBugs();
 
 
-    currentPage = 1;
-
-
-    renderBugTracker();
+    currentPage =
+      1;
 
 
     closeImportModal();
 
 
-    alert(
-      `${newTicketCount} new bug ticket(s) imported successfully.`
+    refreshAllViews();
+
+
+    let message =
+      `${newTicketCount} new bug ticket(s) imported successfully.`;
+
+
+    if (
+      duplicateCount > 0
+    ) {
+
+      message +=
+        ` ${duplicateCount} duplicate record(s) were ignored.`;
+
+    }
+
+
+    showNotification(
+      message,
+      "success",
+      "Import completed"
     );
 
   } catch (error) {
@@ -557,10 +1447,26 @@ async function importFile(file) {
       error
     );
 
-    alert(
-      "Unable to import the file. Please check the file format."
-    );
+
+    showCenterModal({
+
+      title:
+        "Import Failed",
+
+      message:
+        error?.message ||
+        "Unable to import the file. Please check the file format and try again.",
+
+      type:
+        "error",
+
+      cancelText:
+        "Close"
+
+    });
+
   }
+
 }
 
 
@@ -568,7 +1474,41 @@ async function importFile(file) {
    CSV
 ========================================================= */
 
-function readCSV(file) {
+function readCSV(
+  file
+) {
+
+  return readDelimitedFile(
+    file,
+    ","
+  );
+
+}
+
+
+/* =========================================================
+   TSV
+========================================================= */
+
+function readTSV(
+  file
+) {
+
+  return readDelimitedFile(
+    file,
+    "\t"
+  );
+
+}
+
+
+/* =========================================================
+   TXT
+========================================================= */
+
+function readTXT(
+  file
+) {
 
   return new Promise(
     (
@@ -586,12 +1526,28 @@ function readCSV(file) {
           try {
 
             const text =
-              event.target.result;
+              String(
+                event.target.result ||
+                ""
+              );
+
+
+            /*
+              Automatically use tab if
+              the TXT file is tab-separated.
+              Otherwise use comma.
+            */
+
+            const delimiter =
+              text.includes("\t")
+                ? "\t"
+                : ",";
 
 
             const rows =
-              parseCSV(
-                text
+              parseDelimited(
+                text,
+                delimiter
               );
 
 
@@ -602,6 +1558,7 @@ function readCSV(file) {
               resolve([]);
 
               return;
+
             }
 
 
@@ -653,7 +1610,9 @@ function readCSV(file) {
             reject(
               error
             );
+
           }
+
         };
 
 
@@ -667,10 +1626,135 @@ function readCSV(file) {
 
     }
   );
+
 }
 
 
-function parseCSV(text) {
+/* =========================================================
+   DELIMITED FILE
+========================================================= */
+
+function readDelimitedFile(
+  file,
+  delimiter
+) {
+
+  return new Promise(
+    (
+      resolve,
+      reject
+    ) => {
+
+      const reader =
+        new FileReader();
+
+
+      reader.onload =
+        event => {
+
+          try {
+
+            const text =
+              String(
+                event.target.result ||
+                ""
+              );
+
+
+            const rows =
+              parseDelimited(
+                text,
+                delimiter
+              );
+
+
+            if (
+              rows.length < 2
+            ) {
+
+              resolve([]);
+
+              return;
+
+            }
+
+
+            const headers =
+              rows[0].map(
+                header =>
+                  normalize(
+                    header
+                  )
+              );
+
+
+            const data =
+              rows
+                .slice(1)
+                .map(
+                  row => {
+
+                    const object =
+                      {};
+
+
+                    headers.forEach(
+                      (
+                        header,
+                        index
+                      ) => {
+
+                        object[header] =
+                          row[index] ??
+                          "";
+
+                      }
+                    );
+
+
+                    return object;
+
+                  }
+                );
+
+
+            resolve(
+              data
+            );
+
+          } catch (error) {
+
+            reject(
+              error
+            );
+
+          }
+
+        };
+
+
+      reader.onerror =
+        reject;
+
+
+      reader.readAsText(
+        file
+      );
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   DELIMITED PARSER
+========================================================= */
+
+function parseDelimited(
+  text,
+  delimiter = ","
+) {
 
   const rows = [];
 
@@ -680,6 +1764,19 @@ function parseCSV(text) {
 
   let insideQuotes =
     false;
+
+
+  /*
+    Remove UTF-8 BOM.
+  */
+
+  text =
+    String(
+      text ?? ""
+    ).replace(
+      /^\uFEFF/,
+      ""
+    );
 
 
   for (
@@ -706,6 +1803,7 @@ function parseCSV(text) {
       i++;
 
       continue;
+
     }
 
 
@@ -717,11 +1815,12 @@ function parseCSV(text) {
         !insideQuotes;
 
       continue;
+
     }
 
 
     if (
-      char === "," &&
+      char === delimiter &&
       !insideQuotes
     ) {
 
@@ -732,6 +1831,7 @@ function parseCSV(text) {
       value = "";
 
       continue;
+
     }
 
 
@@ -749,6 +1849,7 @@ function parseCSV(text) {
       ) {
 
         i++;
+
       }
 
 
@@ -762,23 +1863,28 @@ function parseCSV(text) {
       if (
         row.some(
           cell =>
-            cell.trim() !== ""
+            String(
+              cell
+            ).trim() !== ""
         )
       ) {
 
         rows.push(
           row
         );
+
       }
 
 
       row = [];
 
       continue;
+
     }
 
 
     value += char;
+
   }
 
 
@@ -795,18 +1901,23 @@ function parseCSV(text) {
     if (
       row.some(
         cell =>
-          cell.trim() !== ""
-      )
+          String(
+            cell
+          ).trim() !== ""
+        )
     ) {
 
       rows.push(
         row
       );
+
     }
+
   }
 
 
   return rows;
+
 }
 
 
@@ -814,7 +1925,9 @@ function parseCSV(text) {
    JSON
 ========================================================= */
 
-function readJSON(file) {
+function readJSON(
+  file
+) {
 
   return new Promise(
     (
@@ -848,16 +1961,10 @@ function readJSON(file) {
               );
 
               return;
+
             }
 
 
-            /*
-              Also support:
-
-              {
-                "bugs": [...]
-              }
-            */
             if (
               Array.isArray(
                 parsed.bugs
@@ -869,6 +1976,37 @@ function readJSON(file) {
               );
 
               return;
+
+            }
+
+
+            if (
+              Array.isArray(
+                parsed.data
+              )
+            ) {
+
+              resolve(
+                parsed.data
+              );
+
+              return;
+
+            }
+
+
+            if (
+              Array.isArray(
+                parsed.rows
+              )
+            ) {
+
+              resolve(
+                parsed.rows
+              );
+
+              return;
+
             }
 
 
@@ -879,7 +2017,9 @@ function readJSON(file) {
             reject(
               error
             );
+
           }
+
         };
 
 
@@ -893,6 +2033,7 @@ function readJSON(file) {
 
     }
   );
+
 }
 
 
@@ -900,7 +2041,9 @@ function readJSON(file) {
    EXCEL
 ========================================================= */
 
-function readExcel(file) {
+function readExcel(
+  file
+) {
 
   return new Promise(
     (
@@ -915,11 +2058,12 @@ function readExcel(file) {
 
         reject(
           new Error(
-            "SheetJS is not loaded. Add the XLSX script before app.js."
+            "SheetJS is not loaded. Please add the XLSX library to index.html before app.js."
           )
         );
 
         return;
+
       }
 
 
@@ -941,6 +2085,21 @@ function readExcel(file) {
               );
 
 
+            if (
+              !workbook.SheetNames.length
+            ) {
+
+              resolve([]);
+
+              return;
+
+            }
+
+
+            /*
+              Use the first worksheet.
+            */
+
             const firstSheet =
               workbook.Sheets[
                 workbook.SheetNames[0]
@@ -951,7 +2110,8 @@ function readExcel(file) {
               XLSX.utils.sheet_to_json(
                 firstSheet,
                 {
-                  defval: ""
+                  defval: "",
+                  raw: false
                 }
               );
 
@@ -965,7 +2125,9 @@ function readExcel(file) {
             reject(
               error
             );
+
           }
+
         };
 
 
@@ -979,6 +2141,217 @@ function readExcel(file) {
 
     }
   );
+
+}
+
+
+/* =========================================================
+   DOCX
+========================================================= */
+
+function readDOCX(
+  file
+) {
+
+  return new Promise(
+    (
+      resolve,
+      reject
+    ) => {
+
+      if (
+        typeof mammoth ===
+        "undefined"
+      ) {
+
+        reject(
+          new Error(
+            "DOCX support requires the Mammoth library. Please add Mammoth to index.html before app.js."
+          )
+        );
+
+        return;
+
+      }
+
+
+      const reader =
+        new FileReader();
+
+
+      reader.onload =
+        async event => {
+
+          try {
+
+            const result =
+              await mammoth.convertToHtml(
+                {
+                  arrayBuffer:
+                    event.target.result
+                }
+              );
+
+
+            const parser =
+              new DOMParser();
+
+
+            const document =
+              parser.parseFromString(
+                result.value,
+                "text/html"
+              );
+
+
+            const tables =
+              Array.from(
+                document.querySelectorAll(
+                  "table"
+                )
+              );
+
+
+            if (
+              tables.length === 0
+            ) {
+
+              resolve([]);
+
+              return;
+
+            }
+
+
+            const allRows = [];
+
+
+            /*
+              Read every table in the
+              DOCX. This makes DOCX
+              imports more flexible.
+            */
+
+            tables.forEach(
+              table => {
+
+                const rows =
+                  Array.from(
+                    table.querySelectorAll(
+                      "tr"
+                    )
+                  );
+
+
+                if (
+                  rows.length < 2
+                ) {
+
+                  return;
+
+                }
+
+
+                const headers =
+                  Array.from(
+                    rows[0].querySelectorAll(
+                      "th, td"
+                    )
+                  ).map(
+                    cell =>
+                      normalize(
+                        cell.textContent
+                      )
+                  );
+
+
+                rows
+                  .slice(1)
+                  .forEach(
+                    row => {
+
+                      const cells =
+                        Array.from(
+                          row.querySelectorAll(
+                            "th, td"
+                          )
+                        );
+
+
+                      const object =
+                        {};
+
+
+                      headers.forEach(
+                        (
+                          header,
+                          index
+                        ) => {
+
+                          object[header] =
+                            normalize(
+                              cells[index]
+                                ?.textContent
+                            );
+
+                        }
+                      );
+
+
+                      const hasData =
+                        Object.values(
+                          object
+                        ).some(
+                          value =>
+                            normalize(
+                              value
+                            ) !== ""
+                        );
+
+
+                      if (
+                        hasData
+                      ) {
+
+                        allRows.push(
+                          object
+                        );
+
+                      }
+
+                    }
+                  );
+
+              }
+            );
+
+
+            resolve(
+              allRows
+            );
+
+          } catch (error) {
+
+            reject(
+              error
+            );
+
+          }
+
+        };
+
+
+      reader.onerror =
+        reject;
+
+
+      reader.readAsArrayBuffer(
+        file
+      );
+
+    }
+  );
+
 }
 
 
@@ -1014,30 +2387,19 @@ function applyBugFilters() {
           );
 
 
-        /*
-          Search includes:
-          Bug Title
-          Ticket Number
-          Game
-          Build
-          etc.
-        */
         const searchableText = [
 
-          bug.bugTitle,
+          bug.build,
+          bug.ticketUrl,
           ticketId,
           bug.game,
-          bug.build,
-          bug.product,
+          bug.category,
+          bug.bugTitle,
           bug.priority,
+          bug.dateCreated,
           bug.status,
-          bug.environment,
-          bug.deviceBrowser,
           bug.createdBy,
-          bug.assignedTo,
           bug.validatedBy,
-          bug.fixedBuild,
-          bug.dateResolved,
           bug.remarks
 
         ]
@@ -1077,6 +2439,7 @@ function applyBugFilters() {
           matchesGame &&
           matchesStatus
         );
+
       }
     );
 
@@ -1098,7 +2461,9 @@ function applyBugFilters() {
 
     currentPage =
       totalPages;
+
   }
+
 }
 
 
@@ -1121,6 +2486,7 @@ function populateFilters() {
   ) {
 
     return;
+
   }
 
 
@@ -1132,7 +2498,7 @@ function populateFilters() {
     statusSelect.value;
 
 
-  const games = [
+  const bugGames = [
     ...new Set(
       bugs
         .map(
@@ -1141,7 +2507,12 @@ function populateFilters() {
         )
         .filter(Boolean)
     )
-  ].sort();
+  ].sort(
+    (a, b) =>
+      a.localeCompare(
+        b
+      )
+  );
 
 
   const statuses = [
@@ -1153,20 +2524,28 @@ function populateFilters() {
         )
         .filter(Boolean)
     )
-  ].sort();
+  ].sort(
+    (a, b) =>
+      a.localeCompare(
+        b
+      )
+  );
 
 
   gameSelect.innerHTML = `
+
     <option value="all">
       All Games
     </option>
 
-    ${games
+    ${bugGames
       .map(
         game => `
-          <option value="${escapeHTML(
-            game
-          )}">
+          <option
+            value="${escapeHTML(
+              game
+            )}"
+          >
             ${escapeHTML(
               game
             )}
@@ -1174,10 +2553,12 @@ function populateFilters() {
         `
       )
       .join("")}
+
   `;
 
 
   statusSelect.innerHTML = `
+
     <option value="all">
       All Statuses
     </option>
@@ -1185,9 +2566,11 @@ function populateFilters() {
     ${statuses
       .map(
         status => `
-          <option value="${escapeHTML(
-            status
-          )}">
+          <option
+            value="${escapeHTML(
+              status
+            )}"
+          >
             ${escapeHTML(
               status
             )}
@@ -1195,11 +2578,12 @@ function populateFilters() {
         `
       )
       .join("")}
+
   `;
 
 
   if (
-    games.some(
+    bugGames.some(
       game =>
         normalizeKey(
           game
@@ -1212,6 +2596,7 @@ function populateFilters() {
 
     gameSelect.value =
       currentGame;
+
   }
 
 
@@ -1229,7 +2614,9 @@ function populateFilters() {
 
     statusSelect.value =
       currentStatus;
+
   }
+
 }
 
 
@@ -1240,6 +2627,7 @@ function populateFilters() {
 export function renderBugTable() {
 
   renderBugTracker();
+
 }
 
 
@@ -1254,6 +2642,7 @@ function renderBugTracker() {
   renderTable();
 
   renderPagination();
+
 }
 
 
@@ -1281,7 +2670,6 @@ function renderStats() {
       bug =>
         [
           "in progress",
-          "in-progress",
           "ongoing"
         ].includes(
           normalizeKey(
@@ -1307,7 +2695,7 @@ function renderStats() {
     ).length;
 
 
-  const games =
+  const bugGames =
     new Set(
       bugs
         .map(
@@ -1326,6 +2714,7 @@ function renderStats() {
 
     $("bugTotal").textContent =
       total;
+
   }
 
 
@@ -1335,6 +2724,7 @@ function renderStats() {
 
     $("bugOpen").textContent =
       open;
+
   }
 
 
@@ -1344,6 +2734,7 @@ function renderStats() {
 
     $("bugProgress").textContent =
       progress;
+
   }
 
 
@@ -1353,6 +2744,7 @@ function renderStats() {
 
     $("bugClosed").textContent =
       closed;
+
   }
 
 
@@ -1361,8 +2753,10 @@ function renderStats() {
   ) {
 
     $("bugGameCount").textContent =
-      games.size;
+      bugGames.size;
+
   }
+
 }
 
 
@@ -1402,10 +2796,11 @@ function renderTable() {
   ) {
 
     tbody.innerHTML = `
+
       <tr>
 
         <td
-          colspan="10"
+          colspan="12"
           class="bug-empty"
         >
 
@@ -1424,9 +2819,11 @@ function renderTable() {
         </td>
 
       </tr>
+
     `;
 
     return;
+
   }
 
 
@@ -1439,14 +2836,32 @@ function renderTable() {
           )
       )
       .join("");
+
 }
 
 
 /* =========================================================
    CREATE TABLE ROW
+
+   COLUMN ORDER:
+
+   1. Build
+   2. Ticket URL
+   3. Game
+   4. Category
+   5. Bug Title
+   6. Priority
+   7. Date Created
+   8. Status
+   9. Created By
+   10. Validated By
+   11. Remarks
+   12. Actions
 ========================================================= */
 
-function createBugRow(bug) {
+function createBugRow(
+  bug
+) {
 
   const ticketId =
     getTicketId(
@@ -1455,24 +2870,17 @@ function createBugRow(bug) {
 
 
   /*
-    Ticket number is displayed
-    as #468.
-
-    The ORIGINAL Ticket URL is
-    used as the href.
-
-    Example:
-
-    Display:
-    #468
-
-    href:
-    https://gitlab.ntt.lan/game/bingo/bingo-pilipino/-/issues/468
+    The UI displays #468,
+    but the original Ticket URL
+    remains attached to the link.
   */
 
   const ticketCell =
-    bug.ticketUrl && ticketId
+    bug.ticketUrl &&
+    ticketId
+
       ? `
+
         <a
           href="${escapeHTML(
             bug.ticketUrl
@@ -1485,16 +2893,22 @@ function createBugRow(bug) {
           )}"
           onclick="event.stopPropagation();"
         >
+
           #${escapeHTML(
             ticketId
           )}
+
         </a>
+
       `
+
       : `
+
         <span
           class="ticketLink disabled"
           title="No ticket URL available"
         >
+
           ${
             ticketId
               ? `#${escapeHTML(
@@ -1502,40 +2916,69 @@ function createBugRow(bug) {
                 )}`
               : "—"
           }
+
         </span>
+
       `;
 
 
   return `
+
     <tr>
 
-      <!-- GAME -->
-      <td>
-        ${escapeHTML(
-          bug.game ||
-          "—"
-        )}
-      </td>
+      <!-- 1. BUILD -->
 
-
-      <!-- BUILD -->
       <td>
+
         <span class="buildText">
+
           ${escapeHTML(
             bug.build ||
             "—"
           )}
+
         </span>
+
       </td>
 
 
-      <!-- TICKET -->
-      <td class="ticketIdCell">
+      <!-- 2. TICKET URL -->
+
+      <td
+        class="ticketUrlCell"
+      >
+
         ${ticketCell}
+
       </td>
 
 
-      <!-- BUG TITLE -->
+      <!-- 3. GAME -->
+
+      <td>
+
+        ${escapeHTML(
+          bug.game ||
+          "—"
+        )}
+
+      </td>
+
+
+      <!-- 4. CATEGORY -->
+
+      <td>
+
+        ${escapeHTML(
+          bug.category ||
+          "—"
+        )}
+
+      </td>
+
+
+      <!-- 5. BUG TITLE -->
+
       <td>
 
         <div
@@ -1556,50 +2999,66 @@ function createBugRow(bug) {
       </td>
 
 
-      <!-- PRIORITY -->
+      <!-- 6. PRIORITY -->
+
       <td>
+
         ${createPriorityPill(
           bug.priority
         )}
+
       </td>
 
 
-      <!-- DATE CREATED -->
+      <!-- 7. DATE CREATED -->
+
       <td>
+
         ${escapeHTML(
           bug.dateCreated ||
           "—"
         )}
+
       </td>
 
 
-      <!-- STATUS -->
+      <!-- 8. STATUS -->
+
       <td>
+
         ${createStatusPill(
           bug.status
         )}
+
       </td>
 
 
-      <!-- CREATED BY -->
+      <!-- 9. CREATED BY -->
+
       <td>
+
         ${escapeHTML(
           bug.createdBy ||
           "—"
         )}
+
       </td>
 
 
-      <!-- VALIDATED BY -->
+      <!-- 10. VALIDATED BY -->
+
       <td>
+
         ${escapeHTML(
           bug.validatedBy ||
           "—"
         )}
+
       </td>
 
 
-      <!-- REMARKS -->
+      <!-- 11. REMARKS -->
+
       <td>
 
         <div
@@ -1620,10 +3079,13 @@ function createBugRow(bug) {
       </td>
 
 
-      <!-- ACTIONS -->
+      <!-- 12. ACTIONS -->
+
       <td>
 
-        <div class="bugActions">
+        <div
+          class="bugActions"
+        >
 
           <button
             type="button"
@@ -1632,8 +3094,47 @@ function createBugRow(bug) {
               ticketId
             )}"
             title="View Details"
+            aria-label="View Details"
           >
-            👁
+
+            <i
+              class="fa-solid fa-eye"
+            ></i>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="bugAction edit"
+            data-ticket="${escapeHTML(
+              ticketId
+            )}"
+            title="Edit Bug"
+            aria-label="Edit Bug"
+          >
+
+            <i
+              class="fa-solid fa-pen"
+            ></i>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="bugAction delete"
+            data-ticket="${escapeHTML(
+              ticketId
+            )}"
+            title="Delete Bug"
+            aria-label="Delete Bug"
+          >
+
+            <i
+              class="fa-solid fa-trash"
+            ></i>
+
           </button>
 
         </div>
@@ -1641,7 +3142,9 @@ function createBugRow(bug) {
       </td>
 
     </tr>
+
   `;
+
 }
 
 
@@ -1672,6 +3175,7 @@ function renderPagination() {
   ) {
 
     return;
+
   }
 
 
@@ -1723,6 +3227,7 @@ function renderPagination() {
     createPageNumbers(
       totalPages
     );
+
 }
 
 
@@ -1743,19 +3248,27 @@ function createPageNumbers(
       i++
     ) {
 
-      pages.push(i);
+      pages.push(
+        i
+      );
+
     }
 
   } else {
 
-    pages.push(1);
+    pages.push(
+      1
+    );
 
 
     if (
       currentPage > 4
     ) {
 
-      pages.push("...");
+      pages.push(
+        "..."
+      );
+
     }
 
 
@@ -1779,7 +3292,10 @@ function createPageNumbers(
       i++
     ) {
 
-      pages.push(i);
+      pages.push(
+        i
+      );
+
     }
 
 
@@ -1788,13 +3304,17 @@ function createPageNumbers(
       totalPages - 3
     ) {
 
-      pages.push("...");
+      pages.push(
+        "..."
+      );
+
     }
 
 
     pages.push(
       totalPages
     );
+
   }
 
 
@@ -1807,16 +3327,20 @@ function createPageNumbers(
         ) {
 
           return `
+
             <span
               class="bugPageEllipsis"
             >
               ...
             </span>
+
           `;
+
         }
 
 
         return `
+
           <button
             type="button"
             class="bugPageNumber ${
@@ -1826,17 +3350,36 @@ function createPageNumbers(
             }"
             data-page="${page}"
           >
+
             ${page}
+
           </button>
+
         `;
+
       }
     )
     .join("");
+
 }
 
 
 /* =========================================================
    BUG DETAILS MODAL
+
+   FIELD ORDER:
+
+   Build
+   Ticket URL
+   Game
+   Category
+   Bug Title
+   Priority
+   Date Created
+   Status
+   Created By
+   Validated By
+   Remarks
 ========================================================= */
 
 function openBugDetails(
@@ -1878,6 +3421,7 @@ function openBugDetails(
   ) {
 
     return;
+
   }
 
 
@@ -1886,6 +3430,7 @@ function openBugDetails(
     title.textContent =
       bug.bugTitle ||
       "Bug Details";
+
   }
 
 
@@ -1896,25 +3441,14 @@ function openBugDetails(
 
 
   content.innerHTML = `
+
     <div
       class="bugDetailGrid"
     >
 
       ${detailItem(
-        "Game",
-        bug.game
-      )}
-
-      ${detailItem(
         "Build",
         bug.build
-      )}
-
-      ${detailItem(
-        "Ticket",
-        ticketIdValue
-          ? `#${ticketIdValue}`
-          : ""
       )}
 
       ${detailItem(
@@ -1923,8 +3457,13 @@ function openBugDetails(
       )}
 
       ${detailItem(
-        "Product",
-        bug.product
+        "Game",
+        bug.game
+      )}
+
+      ${detailItem(
+        "Category",
+        bug.category
       )}
 
       ${detailItem(
@@ -1948,23 +3487,8 @@ function openBugDetails(
       )}
 
       ${detailItem(
-        "Environment",
-        bug.environment
-      )}
-
-      ${detailItem(
-        "Device / Browser",
-        bug.deviceBrowser
-      )}
-
-      ${detailItem(
         "Created By",
         bug.createdBy
-      )}
-
-      ${detailItem(
-        "Assigned To",
-        bug.assignedTo
       )}
 
       ${detailItem(
@@ -1973,27 +3497,19 @@ function openBugDetails(
       )}
 
       ${detailItem(
-        "Fixed Build",
-        bug.fixedBuild
-      )}
-
-      ${detailItem(
-        "Date Resolved",
-        bug.dateResolved
-      )}
-
-      ${detailItem(
         "Remarks",
         bug.remarks
       )}
 
     </div>
+
   `;
 
 
   modal.classList.add(
     "show"
   );
+
 }
 
 
@@ -2003,25 +3519,32 @@ function detailItem(
 ) {
 
   return `
+
     <div
       class="bugDetailItem"
     >
 
       <span>
+
         ${escapeHTML(
           label
         )}
+
       </span>
 
       <strong>
+
         ${escapeHTML(
           value ||
           "—"
         )}
+
       </strong>
 
     </div>
+
   `;
+
 }
 
 
@@ -2031,6 +3554,7 @@ function closeBugDetails() {
     ?.classList.remove(
       "show"
     );
+
 }
 
 
@@ -2053,11 +3577,17 @@ function openImportModal() {
   if (preview) {
 
     preview.innerHTML = `
+
       <div class="empty">
+
         No file selected.
+
       </div>
+
     `;
+
   }
+
 }
 
 
@@ -2067,6 +3597,7 @@ function closeImportModal() {
     ?.classList.remove(
       "show"
     );
+
 }
 
 
@@ -2093,14 +3624,21 @@ function createPriorityPill(
 
 
   return `
+
     <span
-      class="bugPill priority-${key}"
+      class="bugPill priority-${escapeHTML(
+        key
+      )}"
     >
+
       ${escapeHTML(
         priority
       )}
+
     </span>
+
   `;
+
 }
 
 
@@ -2123,14 +3661,128 @@ function createStatusPill(
 
 
   return `
+
     <span
-      class="bugPill status-${key}"
+      class="bugPill status-${escapeHTML(
+        key
+      )}"
     >
+
       ${escapeHTML(
         status
       )}
+
     </span>
+
   `;
+
+}
+
+
+/* =========================================================
+   REMOVE CRITICAL PRIORITY
+========================================================= */
+
+function removeCriticalPriorityOption() {
+
+  const priorityField =
+    $("bugPriorityField");
+
+
+  if (!priorityField) {
+    return;
+  }
+
+
+  [
+    ...priorityField.options
+  ].forEach(
+    option => {
+
+      if (
+        normalizeKey(
+          option.value
+        ) ===
+        "critical" ||
+        normalizeKey(
+          option.textContent
+        ) ===
+        "critical"
+      ) {
+
+        option.remove();
+
+      }
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   FORM VALUE HELPER
+========================================================= */
+
+/*
+  FormData only reads fields that have
+  matching name="" attributes.
+
+  This helper supports BOTH name=""
+  and ID-based fields.
+*/
+
+function getFormValue(
+  formData,
+  names = [],
+  ids = []
+) {
+
+  for (
+    const name of names
+  ) {
+
+    const value =
+      normalize(
+        formData.get(
+          name
+        )
+      );
+
+    if (value) {
+      return value;
+    }
+
+  }
+
+
+  for (
+    const id of ids
+  ) {
+
+    const field =
+      $(id);
+
+    if (
+      field
+    ) {
+
+      const value =
+        normalize(
+          field.value
+        );
+
+      if (value) {
+        return value;
+      }
+
+    }
+
+  }
+
+
+  return "";
+
 }
 
 
@@ -2187,13 +3839,120 @@ export function initBugTracker() {
         importFile(
           file
         );
+
       }
 
 
       event.target.value =
         "";
+
     }
   );
+
+
+  /* =======================================================
+     DRAG AND DROP IMPORT
+  ======================================================= */
+
+  const dropzone =
+    document.querySelector(
+      ".bugDropzone"
+    );
+
+
+  if (dropzone) {
+
+    dropzone.addEventListener(
+      "dragover",
+      event => {
+
+        event.preventDefault();
+
+        event.stopPropagation();
+
+        dropzone.classList.add(
+          "dragover"
+        );
+
+      }
+    );
+
+
+    dropzone.addEventListener(
+      "dragenter",
+      event => {
+
+        event.preventDefault();
+
+        event.stopPropagation();
+
+        dropzone.classList.add(
+          "dragover"
+        );
+
+      }
+    );
+
+
+    dropzone.addEventListener(
+      "dragleave",
+      event => {
+
+        event.preventDefault();
+
+        event.stopPropagation();
+
+
+        if (
+          event.target ===
+          dropzone
+        ) {
+
+          dropzone.classList.remove(
+            "dragover"
+          );
+
+        }
+
+      }
+    );
+
+
+    dropzone.addEventListener(
+      "drop",
+      event => {
+
+        event.preventDefault();
+
+        event.stopPropagation();
+
+        dropzone.classList.remove(
+          "dragover"
+        );
+
+
+        const files =
+          event.dataTransfer?.files;
+
+
+        if (
+          !files ||
+          files.length === 0
+        ) {
+
+          return;
+
+        }
+
+
+        importFile(
+          files[0]
+        );
+
+      }
+    );
+
+  }
 
 
   /* =======================================================
@@ -2210,66 +3969,44 @@ export function initBugTracker() {
   $("bugForm")
     ?.addEventListener(
       "submit",
-      saveNewBug
+      saveBug
     );
 
 
   /* =======================================================
-     CLOSE ADD BUG MODAL
+     CLOSE ADD/EDIT BUG MODAL
   ======================================================= */
 
-  const closeBugButton =
-    $("closeBugModal");
-
-
-  if (closeBugButton) {
-
-    closeBugButton.addEventListener(
+  $("closeBugModal")
+    ?.addEventListener(
       "click",
       closeBugFormModal
     );
-  }
 
 
-  const cancelBugButton =
-    $("cancelBug");
-
-
-  if (cancelBugButton) {
-
-    cancelBugButton.addEventListener(
+  $("cancelBug")
+    ?.addEventListener(
       "click",
       closeBugFormModal
     );
-  }
 
 
-  /* =======================================================
-     CLOSE ADD BUG MODAL
-     WHEN CLICKING OUTSIDE
-  ======================================================= */
-
-  const bugModal =
-    $("bugModal");
-
-
-  if (bugModal) {
-
-    bugModal.addEventListener(
+  $("bugModal")
+    ?.addEventListener(
       "click",
       event => {
 
         if (
           event.target ===
-          bugModal
+          $("bugModal")
         ) {
 
           closeBugFormModal();
+
         }
 
       }
     );
-  }
 
 
   /* =======================================================
@@ -2383,6 +4120,7 @@ export function initBugTracker() {
           currentPage--;
 
           renderBugTracker();
+
         }
 
       }
@@ -2416,6 +4154,7 @@ export function initBugTracker() {
           currentPage++;
 
           renderBugTracker();
+
         }
 
       }
@@ -2423,7 +4162,7 @@ export function initBugTracker() {
 
 
   /* =======================================================
-     PAGE NUMBERS + BUG DETAILS
+     PAGE NUMBERS / VIEW / EDIT / DELETE
   ======================================================= */
 
   document.addEventListener(
@@ -2446,20 +4185,56 @@ export function initBugTracker() {
         renderBugTracker();
 
         return;
+
       }
 
 
-      const ticketButton =
+      const viewButton =
         event.target.closest(
           ".bugAction.view"
         );
 
 
-      if (ticketButton) {
+      if (viewButton) {
 
         openBugDetails(
-          ticketButton.dataset.ticket
+          viewButton.dataset.ticket
         );
+
+        return;
+
+      }
+
+
+      const editButton =
+        event.target.closest(
+          ".bugAction.edit"
+        );
+
+
+      if (editButton) {
+
+        openEditBugModal(
+          editButton.dataset.ticket
+        );
+
+        return;
+
+      }
+
+
+      const deleteButton =
+        event.target.closest(
+          ".bugAction.delete"
+        );
+
+
+      if (deleteButton) {
+
+        confirmDeleteBug(
+          deleteButton.dataset.ticket
+        );
+
       }
 
     }
@@ -2478,31 +4253,48 @@ export function initBugTracker() {
         bugs.length === 0
       ) {
 
+        showCenterModal({
+
+          title:
+            "Nothing to Clear",
+
+          message:
+            "There are currently no bug tickets to remove.",
+
+          type:
+            "info",
+
+          cancelText:
+            "Close"
+
+        });
+
         return;
+
       }
 
 
-      const confirmed =
-        confirm(
-          "Clear all imported bug tickets?"
-        );
+      showCenterModal({
 
+        title:
+          "Clear All Bug Tickets?",
 
-      if (!confirmed) {
-        return;
-      }
+        message:
+          "This will permanently remove all bug tickets from the tracker.",
 
+        type:
+          "confirm",
 
-      bugs = [];
+        confirmText:
+          "Clear All",
 
+        cancelText:
+          "Cancel",
 
-      saveBugs();
+        onConfirm:
+          clearAllBugs
 
-
-      currentPage = 1;
-
-
-      renderBugTracker();
+      });
 
     }
   );
@@ -2510,7 +4302,6 @@ export function initBugTracker() {
 
   /* =======================================================
      CLOSE IMPORT MODAL
-     WHEN CLICKING OUTSIDE
   ======================================================= */
 
   $("bugImportModal")
@@ -2524,6 +4315,7 @@ export function initBugTracker() {
         ) {
 
           closeImportModal();
+
         }
 
       }
@@ -2532,7 +4324,6 @@ export function initBugTracker() {
 
   /* =======================================================
      CLOSE DETAILS MODAL
-     WHEN CLICKING OUTSIDE
   ======================================================= */
 
   $("bugDetailsModal")
@@ -2546,13 +4337,1217 @@ export function initBugTracker() {
         ) {
 
           closeBugDetails();
+
         }
 
       }
     );
 
 
+  /*
+    Remove Critical from the existing
+    priority select if it is still
+    present in index.html.
+  */
+
+  removeCriticalPriorityOption();
+
+
   renderBugTracker();
+
+}
+
+
+/* =========================================================
+   OPEN ADD BUG MODAL
+========================================================= */
+
+function openAddBugModal() {
+
+  const modal =
+    $("bugModal");
+
+
+  if (!modal) {
+
+    console.error(
+      "bugModal not found."
+    );
+
+    return;
+
+  }
+
+
+  const form =
+    $("bugForm");
+
+
+  if (form) {
+
+    form.reset();
+
+  }
+
+
+  if ($("bugId")) {
+    $("bugId").value = "";
+  }
+
+
+  if ($("bugModalTitle")) {
+
+    $("bugModalTitle").textContent =
+      "Add Bug";
+
+  }
+
+
+  if ($("bugModalSubtitle")) {
+
+    $("bugModalSubtitle").textContent =
+      "Add a bug ticket for tracking.";
+
+  }
+
+
+  const dateField =
+    $("bugDateField");
+
+
+  if (dateField) {
+
+    dateField.value =
+      new Date()
+        .toISOString()
+        .split("T")[0];
+
+  }
+
+
+  populateBugGameField();
+
+  removeCriticalPriorityOption();
+
+
+  modal.classList.add(
+    "show"
+  );
+
+}
+
+
+/* =========================================================
+   OPEN EDIT BUG MODAL
+========================================================= */
+
+function openEditBugModal(
+  ticketId
+) {
+
+  const bug =
+    bugs.find(
+      item =>
+        normalizeKey(
+          getTicketId(
+            item
+          )
+        ) ===
+        normalizeKey(
+          ticketId
+        )
+    );
+
+
+  if (!bug) {
+
+    showCenterModal({
+
+      title:
+        "Bug Not Found",
+
+      message:
+        `Bug ticket #${ticketId} could not be found.`,
+
+      type:
+        "error",
+
+      cancelText:
+        "Close"
+
+    });
+
+    return;
+
+  }
+
+
+  const modal =
+    $("bugModal");
+
+  const form =
+    $("bugForm");
+
+
+  if (
+    !modal ||
+    !form
+  ) {
+
+    return;
+
+  }
+
+
+  populateBugGameField();
+
+  removeCriticalPriorityOption();
+
+
+  if ($("bugId")) {
+
+    $("bugId").value =
+      getTicketId(
+        bug
+      );
+
+  }
+
+
+  if ($("bugModalTitle")) {
+
+    $("bugModalTitle").textContent =
+      "Edit Bug";
+
+  }
+
+
+  if ($("bugModalSubtitle")) {
+
+    $("bugModalSubtitle").textContent =
+      "Update the bug ticket details.";
+
+  }
+
+
+  /*
+    1. Build
+  */
+
+  setField(
+    "bugBuildField",
+    bug.build
+  );
+
+
+  /*
+    2. Ticket URL
+  */
+
+  setField(
+    "bugTicketField",
+    bug.ticketUrl ||
+    bug.ticketId
+  );
+
+
+  /*
+    3. Game
+  */
+
+  setField(
+    "bugGameField",
+    bug.game
+  );
+
+
+  /*
+    4. Category
+  */
+
+  setField(
+    "bugCategoryField",
+    bug.category
+  );
+
+
+  /*
+    5. Bug Title
+  */
+
+  setField(
+    "bugTitleField",
+    bug.bugTitle
+  );
+
+
+  /*
+    6. Priority
+  */
+
+  setField(
+    "bugPriorityField",
+    bug.priority
+  );
+
+
+  /*
+    7. Date Created
+  */
+
+  setField(
+    "bugDateField",
+    bug.dateCreated
+  );
+
+
+  /*
+    8. Status
+  */
+
+  setField(
+    "bugStatusField",
+    bug.status
+  );
+
+
+  /*
+    9. Created By
+  */
+
+  setField(
+    "bugCreatedByField",
+    bug.createdBy
+  );
+
+
+  /*
+    10. Validated By
+  */
+
+  setField(
+    "bugValidatedByField",
+    bug.validatedBy
+  );
+
+
+  /*
+    11. Remarks
+  */
+
+  setField(
+    "bugRemarksField",
+    bug.remarks
+  );
+
+
+  /*
+    Alternate IDs
+  */
+
+  setField(
+    "bugGame",
+    bug.game
+  );
+
+
+  setField(
+    "bugBuild",
+    bug.build
+  );
+
+
+  setField(
+    "bugTicketUrl",
+    bug.ticketUrl ||
+    bug.ticketId
+  );
+
+
+  setField(
+    "bugTicketId",
+    bug.ticketId
+  );
+
+
+  setField(
+    "bugTitle",
+    bug.bugTitle
+  );
+
+
+  setField(
+    "bugPriority",
+    bug.priority
+  );
+
+
+  setField(
+    "bugDate",
+    bug.dateCreated
+  );
+
+
+  setField(
+    "bugStatus",
+    bug.status
+  );
+
+
+  setField(
+    "bugCreatedBy",
+    bug.createdBy
+  );
+
+
+  setField(
+    "bugValidatedBy",
+    bug.validatedBy
+  );
+
+
+  setField(
+    "bugRemarks",
+    bug.remarks
+  );
+
+
+  setField(
+    "bugCategory",
+    bug.category
+  );
+
+
+  modal.classList.add(
+    "show"
+  );
+
+}
+
+
+/* =========================================================
+   SET FIELD
+========================================================= */
+
+function setField(
+  id,
+  value
+) {
+
+  const field =
+    $(id);
+
+
+  if (field) {
+
+    field.value =
+      value || "";
+
+  }
+
+}
+
+
+/* =========================================================
+   POPULATE GAME DROPDOWN
+========================================================= */
+
+function populateBugGameField() {
+
+  const select =
+    $("bugGameField");
+
+
+  if (!select) {
+    return;
+  }
+
+
+  const currentValue =
+    select.value;
+
+
+  select.innerHTML = `
+
+    <option value="">
+      Select game
+    </option>
+
+  `;
+
+
+  const gameList =
+    flatGames(
+      games
+    );
+
+
+  gameList.forEach(
+    game => {
+
+      const option =
+        document.createElement(
+          "option"
+        );
+
+
+      option.value =
+        game.name;
+
+
+      option.textContent =
+        game.name;
+
+
+      select.appendChild(
+        option
+      );
+
+    }
+  );
+
+
+  if (currentValue) {
+
+    select.value =
+      currentValue;
+
+  }
+
+}
+
+
+/* =========================================================
+   CLOSE BUG MODAL
+========================================================= */
+
+function closeBugFormModal() {
+
+  $("bugModal")
+    ?.classList.remove(
+      "show"
+    );
+
+}
+
+
+/* =========================================================
+   SAVE BUG
+========================================================= */
+
+function saveBug(
+  event
+) {
+
+  event.preventDefault();
+
+
+  const form =
+    $("bugForm");
+
+
+  if (!form) {
+    return;
+  }
+
+
+  const formData =
+    new FormData(
+      form
+    );
+
+
+  const editingTicketId =
+    normalize(
+      $("bugId")?.value
+    );
+
+
+  /*
+    Read both name="" and ID-based fields.
+  */
+
+  /* =======================================================
+     1. BUILD
+  ======================================================= */
+
+  const build =
+    getFormValue(
+      formData,
+      [
+        "build"
+      ],
+      [
+        "bugBuildField",
+        "bugBuild"
+      ]
+    );
+
+
+  /* =======================================================
+     2. TICKET URL
+  ======================================================= */
+
+  const rawTicketValue =
+    getFormValue(
+      formData,
+      [
+        "ticketUrl",
+        "ticketId",
+        "ticket"
+      ],
+      [
+        "bugTicketField",
+        "bugTicketUrl",
+        "bugTicketId"
+      ]
+    );
+
+
+  const ticketUrl =
+    isUrl(
+      rawTicketValue
+    )
+      ? rawTicketValue
+      : "";
+
+
+  const ticketId =
+    extractTicketId(
+      rawTicketValue
+    );
+
+
+  /* =======================================================
+     3. GAME
+  ======================================================= */
+
+  const selectedGame =
+    getFormValue(
+      formData,
+      [
+        "game",
+        "games"
+      ],
+      [
+        "bugGameField",
+        "bugGame"
+      ]
+    );
+
+
+  /* =======================================================
+     4. CATEGORY
+  ======================================================= */
+
+  const selectedCategory =
+    getFormValue(
+      formData,
+      [
+        "category",
+        "bugCategory"
+      ],
+      [
+        "bugCategoryField",
+        "bugCategory"
+      ]
+    );
+
+
+  /* =======================================================
+     5. BUG TITLE
+  ======================================================= */
+
+  const bugTitle =
+    getFormValue(
+      formData,
+      [
+        "bugTitle",
+        "title"
+      ],
+      [
+        "bugTitleField",
+        "bugTitle"
+      ]
+    );
+
+
+  /* =======================================================
+     6. PRIORITY
+  ======================================================= */
+
+  const priority =
+    getFormValue(
+      formData,
+      [
+        "priority"
+      ],
+      [
+        "bugPriorityField",
+        "bugPriority"
+      ]
+    );
+
+
+  /* =======================================================
+     7. DATE CREATED
+  ======================================================= */
+
+  const dateCreated =
+    getFormValue(
+      formData,
+      [
+        "dateCreated",
+        "createdDate"
+      ],
+      [
+        "bugDateField",
+        "bugDate"
+      ]
+    );
+
+
+  /* =======================================================
+     8. STATUS
+  ======================================================= */
+
+  const status =
+    getFormValue(
+      formData,
+      [
+        "status"
+      ],
+      [
+        "bugStatusField",
+        "bugStatus"
+      ]
+    );
+
+
+  /* =======================================================
+     9. CREATED BY
+  ======================================================= */
+
+  const createdBy =
+    getFormValue(
+      formData,
+      [
+        "createdBy"
+      ],
+      [
+        "bugCreatedByField",
+        "bugCreatedBy"
+      ]
+    );
+
+
+  /* =======================================================
+     10. VALIDATED BY
+  ======================================================= */
+
+  const validatedBy =
+    getFormValue(
+      formData,
+      [
+        "validatedBy"
+      ],
+      [
+        "bugValidatedByField",
+        "bugValidatedBy"
+      ]
+    );
+
+
+  /* =======================================================
+     11. REMARKS
+  ======================================================= */
+
+  const remarks =
+    getFormValue(
+      formData,
+      [
+        "remarks",
+        "remark"
+      ],
+      [
+        "bugRemarksField",
+        "bugRemarks"
+      ]
+    );
+
+
+  /* =======================================================
+     CREATE BUG OBJECT
+  ======================================================= */
+
+  const bug =
+    normalizeBug({
+
+      build:
+
+        build,
+
+      ticketUrl:
+
+        ticketUrl,
+
+      ticketId:
+
+        ticketId,
+
+      game:
+
+        selectedGame,
+
+      category:
+
+        selectedCategory ||
+        getGameCategory(
+          selectedGame
+        ),
+
+      bugTitle:
+
+        bugTitle,
+
+      priority:
+
+        priority,
+
+      dateCreated:
+
+        dateCreated,
+
+      status:
+
+        status,
+
+      createdBy:
+
+        createdBy,
+
+      validatedBy:
+
+        validatedBy,
+
+      remarks:
+
+        remarks
+
+    });
+
+
+  /* =======================================================
+     VALIDATION
+  ======================================================= */
+
+  if (!bug.game) {
+
+    showCenterModal({
+
+      title:
+        "Game Required",
+
+      message:
+        "Please select a game.",
+
+      type:
+        "warning",
+
+      cancelText:
+        "Close"
+
+    });
+
+    return;
+
+  }
+
+
+  if (!rawTicketValue) {
+
+    showCenterModal({
+
+      title:
+        "Ticket URL Required",
+
+      message:
+        "Please enter a Ticket URL.",
+
+      type:
+        "warning",
+
+      cancelText:
+        "Close"
+
+    });
+
+    return;
+
+  }
+
+
+  if (!ticketId) {
+
+    showCenterModal({
+
+      title:
+        "Invalid Ticket",
+
+      message:
+        "Unable to get the Ticket ID from the Ticket URL provided.",
+
+      type:
+        "error",
+
+      cancelText:
+        "Close"
+
+    });
+
+    return;
+
+  }
+
+
+  if (!bug.bugTitle) {
+
+    showCenterModal({
+
+      title:
+        "Bug Title Required",
+
+      message:
+        "Please enter a bug title.",
+
+      type:
+        "warning",
+
+      cancelText:
+        "Close"
+
+    });
+
+    return;
+
+  }
+
+
+  /* =======================================================
+     DUPLICATE TICKET
+  ======================================================= */
+
+  const duplicate =
+    bugs.some(
+      existing => {
+
+        const existingTicketId =
+          getTicketId(
+            existing
+          );
+
+
+        if (
+          editingTicketId &&
+          normalizeKey(
+            existingTicketId
+          ) ===
+          normalizeKey(
+            editingTicketId
+          )
+        ) {
+
+          return false;
+
+        }
+
+
+        return (
+          existingTicketId &&
+          normalizeKey(
+            existingTicketId
+          ) ===
+          normalizeKey(
+            ticketId
+          )
+        );
+
+      }
+    );
+
+
+  if (duplicate) {
+
+    showCenterModal({
+
+      title:
+        "Duplicate Ticket",
+
+      message:
+        `Ticket #${ticketId} already exists.`,
+
+      type:
+        "warning",
+
+      cancelText:
+        "Close"
+
+    });
+
+    return;
+
+  }
+
+
+  /* =======================================================
+     EDIT EXISTING BUG
+  ======================================================= */
+
+  if (editingTicketId) {
+
+    const index =
+      bugs.findIndex(
+        existing =>
+          normalizeKey(
+            getTicketId(
+              existing
+            )
+          ) ===
+          normalizeKey(
+            editingTicketId
+          )
+      );
+
+
+    if (index !== -1) {
+
+      bugs[index] =
+        bug;
+
+
+      saveBugs();
+
+
+      currentPage =
+        1;
+
+
+      closeBugFormModal();
+
+      refreshAllViews();
+
+
+      showNotification(
+        `Bug #${ticketId} has been updated.`,
+        "success",
+        "Bug updated"
+      );
+
+
+      return;
+
+    }
+
+  }
+
+
+  /* =======================================================
+     ADD NEW BUG
+  ======================================================= */
+
+  bugs.push(
+    bug
+  );
+
+
+  saveBugs();
+
+
+  currentPage =
+    1;
+
+
+  closeBugFormModal();
+
+  refreshAllViews();
+
+
+  showNotification(
+    `Bug #${ticketId} added successfully.`,
+    "success",
+    "Bug added"
+  );
+
+}
+
+
+/* =========================================================
+   DELETE BUG
+========================================================= */
+
+function confirmDeleteBug(
+  ticketId
+) {
+
+  const bug =
+    bugs.find(
+      item =>
+        normalizeKey(
+          getTicketId(
+            item
+          )
+        ) ===
+        normalizeKey(
+          ticketId
+        )
+    );
+
+
+  if (!bug) {
+
+    showCenterModal({
+
+      title:
+        "Bug Not Found",
+
+      message:
+        `Bug ticket #${ticketId} could not be found.`,
+
+      type:
+        "error",
+
+      cancelText:
+        "Close"
+
+    });
+
+    return;
+
+  }
+
+
+  showCenterModal({
+
+    title:
+      "Delete Bug Ticket?",
+
+    message:
+      `Are you sure you want to delete ticket #${getTicketId(
+        bug
+      )}? This action cannot be undone.`,
+
+    type:
+      "confirm",
+
+    confirmText:
+      "Delete",
+
+    cancelText:
+      "Cancel",
+
+    onConfirm:
+      () =>
+        deleteBug(
+          getTicketId(
+            bug
+          )
+        )
+
+  });
+
+}
+
+
+function deleteBug(
+  ticketId
+) {
+
+  const index =
+    bugs.findIndex(
+      bug =>
+        normalizeKey(
+          getTicketId(
+            bug
+          )
+        ) ===
+        normalizeKey(
+          ticketId
+        )
+    );
+
+
+  if (index === -1) {
+    return;
+  }
+
+
+  bugs.splice(
+    index,
+    1
+  );
+
+
+  saveBugs();
+
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        filteredBugs.length /
+        pageSize
+      )
+    );
+
+
+  if (
+    currentPage >
+    totalPages
+  ) {
+
+    currentPage =
+      totalPages;
+
+  }
+
+
+  refreshAllViews();
+
+
+  showNotification(
+    `Bug #${ticketId} has been deleted.`,
+    "success",
+    "Bug deleted"
+  );
+
+}
+
+
+/* =========================================================
+   CLEAR ALL BUGS
+========================================================= */
+
+function clearAllBugs() {
+
+  bugs = [];
+
+
+  saveBugs();
+
+
+  currentPage =
+    1;
+
+
+  refreshAllViews();
+
+
+  showNotification(
+    "All bug tickets have been removed.",
+    "success",
+    "Bug tracker cleared"
+  );
+
 }
 
 
@@ -2560,7 +5555,9 @@ export function initBugTracker() {
    ESCAPE HTML
 ========================================================= */
 
-function escapeHTML(value) {
+function escapeHTML(
+  value
+) {
 
   return String(
     value ?? ""
@@ -2585,387 +5582,5 @@ function escapeHTML(value) {
       /'/g,
       "&#039;"
     );
-}
 
-
-/* =========================================================
-   ADD BUG MODAL
-========================================================= */
-
-function openAddBugModal() {
-
-  const modal =
-    $("bugModal");
-
-
-  if (!modal) {
-
-    console.error(
-      "bugModal not found."
-    );
-
-    return;
-  }
-
-
-  const form =
-    $("bugForm");
-
-
-  if (form) {
-
-    form.reset();
-  }
-
-
-  const bugId =
-    $("bugId");
-
-
-  if (bugId) {
-
-    bugId.value = "";
-  }
-
-
-  const title =
-    $("bugModalTitle");
-
-
-  if (title) {
-
-    title.textContent =
-      "Add Bug";
-  }
-
-
-  const subtitle =
-    $("bugModalSubtitle");
-
-
-  if (subtitle) {
-
-    subtitle.textContent =
-      "Add a bug ticket for tracking.";
-  }
-
-
-  const dateField =
-    $("bugDateField");
-
-
-  if (dateField) {
-
-    dateField.value =
-      new Date()
-        .toISOString()
-        .split("T")[0];
-  }
-
-
-  populateBugGameField();
-
-
-  modal.classList.add(
-    "show"
-  );
-}
-
-
-/* =========================================================
-   POPULATE GAME DROPDOWN
-========================================================= */
-
-function populateBugGameField() {
-
-  const select =
-    $("bugGameField");
-
-
-  if (!select) {
-
-    return;
-  }
-
-
-  select.innerHTML = `
-    <option value="">
-      Select game
-    </option>
-  `;
-
-
-  const games = [
-    ...new Set(
-      bugs
-        .map(
-          bug =>
-            bug.game
-        )
-        .filter(Boolean)
-    )
-  ].sort();
-
-
-  games.forEach(
-    game => {
-
-      const option =
-        document.createElement(
-          "option"
-        );
-
-
-      option.value =
-        game;
-
-
-      option.textContent =
-        game;
-
-
-      select.appendChild(
-        option
-      );
-
-    }
-  );
-}
-
-
-/* =========================================================
-   CLOSE ADD BUG MODAL
-========================================================= */
-
-function closeBugFormModal() {
-
-  const modal =
-    $("bugModal");
-
-
-  if (!modal) {
-
-    console.error(
-      "bugModal not found."
-    );
-
-    return;
-  }
-
-
-  modal.classList.remove(
-    "show"
-  );
-}
-
-
-/* =========================================================
-   SAVE NEW BUG
-========================================================= */
-
-function saveNewBug(event) {
-
-  event.preventDefault();
-
-
-  const form =
-    $("bugForm");
-
-
-  if (!form) {
-
-    console.error(
-      "bugForm not found."
-    );
-
-    return;
-  }
-
-
-  const formData =
-    new FormData(
-      form
-    );
-
-
-  /*
-    Get Ticket URL FIRST.
-    Ticket ID will automatically
-    come from the last part.
-  */
-  const ticketUrl =
-    normalize(
-      formData.get(
-        "ticketUrl"
-      )
-    );
-
-
-  const ticketId =
-    extractTicketId(
-      ticketUrl
-    );
-
-
-  const bug =
-    normalizeBug({
-
-      game:
-        formData.get(
-          "game"
-        ),
-
-      build:
-        formData.get(
-          "build"
-        ),
-
-      ticketUrl:
-        ticketUrl,
-
-      bugTitle:
-        formData.get(
-          "bugTitle"
-        ),
-
-      priority:
-        formData.get(
-          "priority"
-        ),
-
-      dateCreated:
-        formData.get(
-          "dateCreated"
-        ),
-
-      status:
-        formData.get(
-          "status"
-        ),
-
-      createdBy:
-        formData.get(
-          "createdBy"
-        ),
-
-      validatedBy:
-        formData.get(
-          "validatedBy"
-        ),
-
-      remarks:
-        formData.get(
-          "remarks"
-        )
-
-    });
-
-
-  /* =======================================================
-     VALIDATION
-  ======================================================= */
-
-  if (!bug.game) {
-
-    alert(
-      "Please select a game."
-    );
-
-    return;
-  }
-
-
-  if (!ticketUrl) {
-
-    alert(
-      "Please enter a Ticket URL."
-    );
-
-    return;
-  }
-
-
-  if (!ticketId) {
-
-    alert(
-      "Unable to get the Ticket ID from the Ticket URL."
-    );
-
-    return;
-  }
-
-
-  if (!bug.bugTitle) {
-
-    alert(
-      "Please enter a bug title."
-    );
-
-    return;
-  }
-
-
-  /* =======================================================
-     DUPLICATE TICKET
-  ======================================================= */
-
-  const duplicate =
-    bugs.some(
-      existing => {
-
-        const existingTicketId =
-          getTicketId(
-            existing
-          );
-
-
-        return (
-          existingTicketId &&
-          normalizeKey(
-            existingTicketId
-          ) ===
-          normalizeKey(
-            ticketId
-          )
-        );
-
-      }
-    );
-
-
-  if (duplicate) {
-
-    alert(
-      `Ticket #${ticketId} already exists.`
-    );
-
-    return;
-  }
-
-
-  /* =======================================================
-     ADD BUG
-  ======================================================= */
-
-  bugs.push(
-    bug
-  );
-
-
-  saveBugs();
-
-
-  currentPage =
-    1;
-
-
-  renderBugTracker();
-
-
-  closeBugFormModal();
-
-
-  alert(
-    `Bug #${ticketId} added successfully.`
-  );
 }

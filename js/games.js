@@ -7,12 +7,16 @@ import {
 import {
   $,
   esc,
-  flatGames
+  flatGames,
+  showNotification,
+  notifyDataChanged
 } from "./utils.js";
 
 import {
   openModal,
-  closeModal
+  closeModal,
+  showCenterAlert,
+  showCenterConfirm
 } from "./modals.js";
 
 
@@ -61,20 +65,24 @@ export function renderGames() {
             <div class="iconBtns">
 
               <button
+                type="button"
                 class="iconBtn edit-game"
                 title="Edit"
+                aria-label="Edit Game"
                 data-name="${esc(game)}"
               >
-                ✎
+                <i class="fa-solid fa-pen"></i>
               </button>
 
 
               <button
+                type="button"
                 class="iconBtn danger delete-game"
                 title="Delete"
+                aria-label="Delete Game"
                 data-name="${esc(game)}"
               >
-                ×
+                <i class="fa-solid fa-trash"></i>
               </button>
 
             </div>
@@ -196,7 +204,7 @@ export function setupGameForm() {
   $("gameForm")
     .addEventListener(
       "submit",
-      event => {
+      async event => {
 
         event.preventDefault();
 
@@ -215,10 +223,24 @@ export function setupGameForm() {
           $("gameCategory").value;
 
 
+        /*
+         * Game name validation.
+         */
+
         if (!newName) {
+
+          await showCenterAlert(
+            "Please enter a game name.",
+            "Game Name Required"
+          );
+
           return;
         }
 
+
+        /*
+         * Duplicate validation.
+         */
 
         const duplicate =
           flatGames(games)
@@ -236,8 +258,9 @@ export function setupGameForm() {
           duplicate.name !== oldName
         ) {
 
-          alert(
-            "That game already exists."
+          await showCenterAlert(
+            "That game already exists.",
+            "Duplicate Game"
           );
 
           return;
@@ -294,9 +317,31 @@ export function setupGameForm() {
 
         saveData();
 
+
         closeModal("gameModal");
 
+
+        /*
+         * Refresh Dashboard,
+         * Tasks, Members and Games
+         * immediately.
+         */
+
+        notifyDataChanged();
+
+
         renderGames();
+
+
+        showNotification(
+          oldName
+            ? "Game changes have been saved."
+            : "New game has been added.",
+          "success",
+          oldName
+            ? "Game updated"
+            : "Game added"
+        );
 
       }
     );
@@ -308,13 +353,19 @@ export function setupGameForm() {
    DELETE GAME
 ========================= */
 
-export function deleteGame(
+export async function deleteGame(
   name
 ) {
 
+  /*
+   * Use the centered confirmation
+   * modal instead of browser confirm().
+   */
+
   const confirmed =
-    confirm(
-      `Delete ${name}? Tasks using this game will also be deleted.`
+    await showCenterConfirm(
+      `Delete ${name}? Tasks using this game will also be deleted.`,
+      "Delete Game"
     );
 
 
@@ -362,6 +413,22 @@ export function deleteGame(
 
   saveData();
 
+
+  /*
+   * Refresh all dependent
+   * views immediately.
+   */
+
+  notifyDataChanged();
+
+
   renderGames();
+
+
+  showNotification(
+    `"${name}" has been deleted.`,
+    "success",
+    "Game deleted"
+  );
 
 }

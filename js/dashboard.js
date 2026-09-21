@@ -210,10 +210,20 @@ function renderTeamCards() {
                             <br>
 
                             ♧
-                            ${esc(
-                              task.ticket ||
-                              "No ticket"
-                            )}
+                            ${
+                              task.ticket
+                                ? `
+                                  <a
+                                    href="${esc(task.ticket)}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="task-ticket-link"
+                                  >
+                                    ${esc(task.ticket)}
+                                  </a>
+                                `
+                                : "No ticket"
+                            }
 
                             <br>
 
@@ -250,23 +260,26 @@ function renderTeamCards() {
 
                           <div class="taskActions">
 
-                           <button
-    type="button"
-    class="dashboard-icon edit"
-    data-id="${esc(task.id)}"
-    title="Edit Task"
-  >
-    ✎
-  </button>
+                            <button
+                              type="button"
+                              class="dashboard-icon edit"
+                              data-id="${esc(task.id)}"
+                              title="Edit Task"
+                              aria-label="Edit Task"
+                            >
+                              <i class="fa-solid fa-pen"></i>
+                            </button>
 
-  <button
-    type="button"
-    class="dashboard-icon delete"
-    data-id="${esc(task.id)}"
-    title="Delete Task"
-  >
-    🗑
-  </button>
+
+                            <button
+                              type="button"
+                              class="dashboard-icon delete"
+                              data-id="${esc(task.id)}"
+                              title="Delete Task"
+                              aria-label="Delete Task"
+                            >
+                              <i class="fa-solid fa-trash"></i>
+                            </button>
 
                           </div>
 
@@ -298,7 +311,8 @@ function renderTeamCards() {
               class="addMemberTask"
               data-member="${esc(member)}"
             >
-              + Add Task
+              <i class="fa-solid fa-plus"></i>
+              Add Task
             </button>
 
           </div>
@@ -357,6 +371,9 @@ function setupDashboardActions() {
 
   /*
    * DELETE TASK
+   *
+   * deleteTask() handles the
+   * centered confirmation modal.
    */
 
   document
@@ -398,9 +415,10 @@ function setupDashboardActions() {
 
 
           /*
-           * Open a new task
-           * and automatically
-           * select this member.
+           * Open a new task,
+           * automatically select
+           * this member, and lock
+           * the member field.
            */
 
           openTask(
@@ -414,3 +432,4 @@ function setupDashboardActions() {
     });
 
 }
+

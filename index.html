@@ -6,10 +6,11 @@
 
   <meta charset="utf-8">
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
-  >
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1"
+
+>
 
   <title>QA Task Tracker</title>
 
@@ -29,188 +30,1175 @@
 
 </head>
 
-
 <body>
-
 
   <div class="app">
 
+```
+<!-- =====================================================
+     SIDEBAR
+====================================================== -->
 
-    <!-- =====================================================
-         SIDEBAR
-    ====================================================== -->
-
-    <aside class="sidebar">
+<aside class="sidebar">
 
 
-      <!-- LOGO -->
+  <!-- LOGO -->
 
-      <div class="logo">
+  <div class="logo">
 
-        <div class="logoMark">
+    <div class="logoMark">
 
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            stroke-width="2"
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        stroke-width="2"
+      >
+
+        <path d="M5 12.5 9 16l10-10" />
+
+        <rect
+          x="3"
+          y="3"
+          width="18"
+          height="18"
+          rx="4"
+        />
+
+      </svg>
+
+    </div>
+
+
+    <div class="logoText">
+
+      <b>
+        QA Task Tracker
+      </b>
+
+      <small>
+        QA Team Workspace
+      </small>
+
+    </div>
+
+  </div>
+
+
+
+  <!-- NAVIGATION -->
+
+  <nav class="nav">
+
+
+    <button
+      class="active"
+      data-view="dashboard"
+    >
+
+      <span>
+        <i class="fa-solid fa-chart-line"></i>
+      </span>
+
+      Dashboard
+
+    </button>
+
+
+    <button
+      data-view="tasks"
+    >
+
+      <span>
+        <i class="fa-solid fa-list-check"></i>
+      </span>
+
+      All Tasks
+
+    </button>
+
+
+    <button
+      data-view="bugs"
+    >
+
+      <span>
+        <i class="fa-solid fa-bug"></i>
+      </span>
+
+      Bug Tracker
+
+    </button>
+
+
+    <button
+      data-view="team"
+    >
+
+      <span>
+        <i class="fa-solid fa-users"></i>
+      </span>
+
+      Members
+
+    </button>
+
+
+    <button
+      data-view="games"
+    >
+
+      <span>
+        <i class="fa-solid fa-gamepad"></i>
+      </span>
+
+      Games
+
+    </button>
+
+
+  </nav>
+
+
+
+  <!-- SIDEBAR FOOTER -->
+
+  <div class="sideBottom">
+
+    QA Team Workspace
+
+    <br>
+
+    Local data • v2.0
+
+  </div>
+
+
+</aside>
+
+
+
+<!-- =====================================================
+     MAIN CONTENT
+====================================================== -->
+
+<main class="main">
+
+
+  <!-- PAGE HEADER -->
+
+  <div class="top">
+
+
+    <div class="title">
+
+      <h1 id="pageTitle">
+        QA Dashboard
+      </h1>
+
+      <p id="subtitle">
+        Track what each QA member is currently working on.
+      </p>
+
+    </div>
+
+
+    <!-- ADD TASK -->
+
+    <button
+      class="primary add-task-button"
+      id="addTask"
+      title="Add Task"
+      aria-label="Add Task"
+    >
+
+      <i class="fa-solid fa-plus"></i>
+
+    </button>
+
+
+  </div>
+
+
+
+  <!-- =====================================================
+       DASHBOARD
+  ====================================================== -->
+
+  <section id="dashboard">
+
+
+    <!-- STATISTICS -->
+
+    <div class="stats">
+
+
+      <!-- MEMBERS -->
+
+      <div class="stat">
+
+        <div class="statTop">
+
+          QA Members
+
+          <div class="statIcon">
+
+            <i class="fa-solid fa-users"></i>
+
+          </div>
+
+        </div>
+
+
+        <div
+          class="num"
+          id="sMembers"
+        >
+          0
+        </div>
+
+      </div>
+
+
+
+      <!-- ACTIVE -->
+
+      <div class="stat">
+
+        <div class="statTop">
+
+          Active Tasks
+
+          <div class="statIcon">
+
+            <i class="fa-solid fa-clock"></i>
+
+          </div>
+
+        </div>
+
+
+        <div
+          class="num"
+          id="sActive"
+        >
+          0
+        </div>
+
+      </div>
+
+
+
+      <!-- BLOCKED -->
+
+      <div class="stat">
+
+        <div class="statTop">
+
+          Blocked
+
+          <div class="statIcon">
+
+            <i class="fa-solid fa-triangle-exclamation"></i>
+
+          </div>
+
+        </div>
+
+
+        <div
+          class="num"
+          id="sBlocked"
+        >
+          0
+        </div>
+
+      </div>
+
+
+
+      <!-- COMPLETED -->
+
+      <div class="stat">
+
+        <div class="statTop">
+
+          Completed
+
+          <div class="statIcon">
+
+            <i class="fa-solid fa-circle-check"></i>
+
+          </div>
+
+        </div>
+
+
+        <div
+          class="num"
+          id="sDone"
+        >
+          0
+        </div>
+
+      </div>
+
+
+    </div>
+
+
+
+    <!-- TEAM CARDS -->
+
+    <div class="panel">
+
+
+      <div class="toolbar">
+
+
+        <input
+          class="field search"
+          id="dashSearch"
+          placeholder="Search member, task, game, ticket..."
+        >
+
+
+        <select
+          class="field"
+          id="dashStatus"
+        >
+
+          <option value="">
+            All statuses
+          </option>
+
+          <option>
+            To Do
+          </option>
+
+          <option>
+            In Progress
+          </option>
+
+          <option>
+            Blocked
+          </option>
+
+          <option>
+            For Review
+          </option>
+
+          <option>
+            Done
+          </option>
+
+        </select>
+
+
+      </div>
+
+
+      <div
+        class="team"
+        id="teamCards"
+      ></div>
+
+
+    </div>
+
+
+  </section>
+
+
+
+  <!-- =====================================================
+       ALL TASKS
+  ====================================================== -->
+
+  <section
+    id="tasks"
+    class="hidden"
+  >
+
+
+    <div class="panel">
+
+
+      <div class="toolbar">
+
+
+        <input
+          class="field search"
+          id="taskSearch"
+          placeholder="Search tasks..."
+        >
+
+
+        <select
+          class="field"
+          id="taskStatus"
+        >
+
+          <option value="">
+            All statuses
+          </option>
+
+          <option>
+            To Do
+          </option>
+
+          <option>
+            In Progress
+          </option>
+
+          <option>
+            Blocked
+          </option>
+
+          <option>
+            For Review
+          </option>
+
+          <option>
+            Done
+          </option>
+
+        </select>
+
+
+      </div>
+
+
+      <div class="tableWrap">
+
+
+        <table class="table">
+
+
+          <thead>
+
+            <tr>
+
+              <th>Task</th>
+
+              <th>Member</th>
+
+              <th>Game</th>
+
+              <th>Ticket</th>
+
+              <th>Status</th>
+
+              <th>Start</th>
+
+              <th>Due</th>
+
+              <th>Actions</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody id="rows"></tbody>
+
+
+        </table>
+
+
+      </div>
+
+
+    </div>
+
+
+  </section>
+
+
+
+  <!-- =====================================================
+       BUG TRACKER
+  ====================================================== -->
+
+  <section
+    id="bugs"
+    class="hidden"
+  >
+
+
+    <div class="bugTrackerView">
+
+
+      <!-- BUG TRACKER HEADER -->
+
+      <div class="bugTrackerHeader">
+
+
+        <div class="bugTrackerTitle">
+
+          <div class="bugTrackerHeading">
+
+            <div class="bugTrackerHeadingIcon">
+
+              <i class="fa-solid fa-bug"></i>
+
+            </div>
+
+            <div>
+
+              <h1>
+                Bug Tracker
+              </h1>
+
+              <p>
+                Track and monitor reported bugs across all QA games.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        <div class="bugTrackerActions">
+
+
+          <!-- ADD BUG -->
+
+          <button
+            type="button"
+            class="bugButton primary"
+            id="addBug"
+            title="Add Bug"
           >
 
-            <path d="M5 12.5 9 16l10-10" />
+            <i class="fa-solid fa-plus"></i>
 
-            <rect
-              x="3"
-              y="3"
-              width="18"
-              height="18"
-              rx="4"
-            />
+            Add Bug
 
-          </svg>
+          </button>
+
+
+
+          <!-- IMPORT -->
+
+          <button
+            type="button"
+            class="bugButton"
+            id="importBugs"
+            title="Import bug tickets"
+          >
+
+            <i class="fa-solid fa-file-import"></i>
+
+            Import
+
+          </button>
+
+
+
+          <!-- CLEAR -->
+
+          <button
+            type="button"
+            class="bugButton danger"
+            id="clearBugs"
+            title="Clear all bug tickets"
+          >
+
+            <i class="fa-solid fa-trash-can"></i>
+
+            Clear
+
+          </button>
+
+
+
+          <!-- FILE INPUT -->
+
+          <input
+            type="file"
+            id="bugFileInput"
+            accept=".csv,.json,.xlsx,.xls,.slxc,.tsv,.txt,.docx"
+            hidden
+          >
+
 
         </div>
 
-
-        <div class="logoText">
-
-          <b>
-            QA Task Tracker
-          </b>
-
-          <small>
-            QA Team Workspace
-          </small>
-
-        </div>
 
       </div>
 
 
 
-      <!-- NAVIGATION -->
+      <!-- =================================================
+           BUG STATISTICS
+      ================================================== -->
 
-      <nav class="nav">
-
-
-        <button
-          class="active"
-          data-view="dashboard"
-        >
-
-          <span>
-            <i class="fa-solid fa-chart-line"></i>
-          </span>
-
-          Dashboard
-
-        </button>
+      <div class="bugStats">
 
 
-        <button
-          data-view="tasks"
-        >
+        <!-- TOTAL -->
 
-          <span>
-            <i class="fa-solid fa-list-check"></i>
-          </span>
+        <div class="bugStat">
 
-          All Tasks
+          <div class="bugStatTop">
 
-        </button>
+            <div>
 
+              <div class="bugStatLabel">
+                Total Bugs
+              </div>
 
-        <button
-          data-view="bugs"
-        >
+              <div
+                class="bugStatValue"
+                id="bugTotal"
+              >
+                0
+              </div>
 
-          <span>
-            <i class="fa-solid fa-bug"></i>
-          </span>
-
-          Bug Tracker
-
-        </button>
+            </div>
 
 
-        <button
-          data-view="team"
-        >
+            <div class="bugStatIcon">
 
-          <span>
-            <i class="fa-solid fa-users"></i>
-          </span>
+              <i class="fa-solid fa-bug"></i>
 
-          Members
+            </div>
 
-        </button>
-
-
-        <button
-          data-view="games"
-        >
-
-          <span>
-            <i class="fa-solid fa-gamepad"></i>
-          </span>
-
-          Games
-
-        </button>
-
-
-      </nav>
-
-
-
-      <!-- SIDEBAR FOOTER -->
-
-      <div class="sideBottom">
-
-        QA Team Workspace
-
-        <br>
-
-        Local data • v2.0
-
-      </div>
-
-
-    </aside>
-
-
-
-    <!-- =====================================================
-         MAIN CONTENT
-    ====================================================== -->
-
-    <main class="main">
-
-
-      <!-- PAGE HEADER -->
-
-      <div class="top">
-
-
-        <div class="title">
-
-          <h1 id="pageTitle">
-            QA Dashboard
-          </h1>
-
-          <p id="subtitle">
-            Track what each QA member is currently working on.
-          </p>
+          </div>
 
         </div>
 
 
-        <!-- ADD TASK -->
+
+        <!-- OPEN -->
+
+        <div class="bugStat">
+
+          <div class="bugStatTop">
+
+            <div>
+
+              <div class="bugStatLabel">
+                Open
+              </div>
+
+              <div
+                class="bugStatValue"
+                id="bugOpen"
+              >
+                0
+              </div>
+
+            </div>
+
+
+            <div class="bugStatIcon">
+
+              <i class="fa-solid fa-folder-open"></i>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        <!-- IN PROGRESS -->
+
+        <div class="bugStat">
+
+          <div class="bugStatTop">
+
+            <div>
+
+              <div class="bugStatLabel">
+                In Progress
+              </div>
+
+              <div
+                class="bugStatValue"
+                id="bugProgress"
+              >
+                0
+              </div>
+
+            </div>
+
+
+            <div class="bugStatIcon">
+
+              <i class="fa-solid fa-spinner"></i>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        <!-- CLOSED -->
+
+        <div class="bugStat">
+
+          <div class="bugStatTop">
+
+            <div>
+
+              <div class="bugStatLabel">
+                Closed
+              </div>
+
+              <div
+                class="bugStatValue"
+                id="bugClosed"
+              >
+                0
+              </div>
+
+            </div>
+
+
+            <div class="bugStatIcon">
+
+              <i class="fa-solid fa-circle-check"></i>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        <!-- GAMES -->
+
+        <div class="bugStat">
+
+          <div class="bugStatTop">
+
+            <div>
+
+              <div class="bugStatLabel">
+                Games
+              </div>
+
+              <div
+                class="bugStatValue"
+                id="bugGameCount"
+              >
+                0
+              </div>
+
+            </div>
+
+
+            <div class="bugStatIcon">
+
+              <i class="fa-solid fa-gamepad"></i>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+      </div>
+
+
+
+      <!-- =================================================
+           BUG FILTER TOOLBAR
+      ================================================== -->
+
+      <div class="bugToolbar">
+
+
+        <!-- SEARCH -->
+
+        <div class="bugSearchBox">
+
+          <i class="fa-solid fa-magnifying-glass"></i>
+
+          <input
+            type="text"
+            id="bugSearch"
+            placeholder="Search bug ID, title, ticket, or remarks..."
+            autocomplete="off"
+          >
+
+        </div>
+
+
+
+        <!-- GAME -->
+
+        <select
+          id="bugGameFilter"
+          class="field"
+        >
+
+          <option value="all">
+            All Games
+          </option>
+
+        </select>
+
+
+
+        <!-- STATUS -->
+
+        <select
+          id="bugStatusFilter"
+          class="field"
+        >
+
+          <option value="all">
+            All Statuses
+          </option>
+
+        </select>
+
+
+      </div>
+
+
+
+      <!-- =================================================
+           BUG TABLE
+      ================================================== -->
+
+      <div class="bugTableCard">
+
+
+        <div class="bugTableScroll">
+
+
+          <table class="bugTable">
+
+
+            <thead>
+
+              <tr>
+
+                <!-- 1 -->
+
+                <th>
+                  Build
+                </th>
+
+
+                <!-- 2 -->
+
+                <th>
+                  Ticket URL
+                </th>
+
+
+                <!-- 3 -->
+
+                <th>
+                  Game
+                </th>
+
+
+                <!-- 4 -->
+
+                <th>
+                  Category
+                </th>
+
+
+                <!-- 5 -->
+
+                <th>
+                  Bug Title
+                </th>
+
+
+                <!-- 6 -->
+
+                <th>
+                  Priority
+                </th>
+
+
+                <!-- 7 -->
+
+                <th>
+                  Date Created
+                </th>
+
+
+                <!-- 8 -->
+
+                <th>
+                  Status
+                </th>
+
+
+                <!-- 9 -->
+
+                <th>
+                  Created By
+                </th>
+
+
+                <!-- 10 -->
+
+                <th>
+                  Validated By
+                </th>
+
+
+                <!-- 11 -->
+
+                <th>
+                  Remarks
+                </th>
+
+
+                <!-- 12 -->
+
+                <th class="actionsColumn">
+                  Actions
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody id="bugTableBody">
+
+              <!-- Bug rows rendered by bugTracker.js -->
+
+            </tbody>
+
+
+          </table>
+
+
+        </div>
+
+
+
+        <!-- =================================================
+             PAGINATION
+        ================================================== -->
+
+        <div class="bugPagination">
+
+
+          <div
+            class="bugPaginationInfo"
+            id="bugPaginationInfo"
+          >
+            Showing 0–0 of 0 bugs
+          </div>
+
+
+
+          <div class="bugPaginationRight">
+
+
+            <!-- ROWS PER PAGE -->
+
+            <label class="bugPageSize">
+
+              Rows:
+
+              <select id="bugPageSize">
+
+                <option value="10">
+                  10
+                </option>
+
+                <option value="25">
+                  25
+                </option>
+
+                <option value="50">
+                  50
+                </option>
+
+                <option value="100">
+                  100
+                </option>
+
+              </select>
+
+            </label>
+
+
+
+            <!-- PREVIOUS -->
+
+            <button
+              type="button"
+              class="bugPageButton"
+              id="bugPrevPage"
+              title="Previous page"
+              aria-label="Previous page"
+            >
+
+              <i class="fa-solid fa-chevron-left"></i>
+
+            </button>
+
+
+
+            <!-- PAGE NUMBERS -->
+
+            <div
+              class="bugPageNumbers"
+              id="bugPageNumbers"
+            ></div>
+
+
+
+            <!-- NEXT -->
+
+            <button
+              type="button"
+              class="bugPageButton"
+              id="bugNextPage"
+              title="Next page"
+              aria-label="Next page"
+            >
+
+              <i class="fa-solid fa-chevron-right"></i>
+
+            </button>
+
+
+          </div>
+
+
+        </div>
+
+
+      </div>
+
+
+    </div>
+
+
+  </section>
+
+
+
+  <!-- =====================================================
+       MEMBERS
+  ====================================================== -->
+
+  <section
+    id="team"
+    class="hidden"
+  >
+
+
+    <div class="panel">
+
+
+      <div class="sectionHead">
+
+
+        <div>
+
+          <h2>
+            QA Members
+          </h2>
+
+
+          <div class="notice">
+
+            Add, edit, or remove team members.
+
+            Removing a member also removes their assigned tasks.
+
+          </div>
+
+        </div>
+
+
+        <!-- ADD MEMBER -->
 
         <button
-          class="primary add-task-button"
-          id="addTask"
-          title="Add Task"
-          aria-label="Add Task"
+          class="primary add-icon-button"
+          id="addMember"
+          title="Add Member"
+          aria-label="Add Member"
+        >
+
+          <i class="fa-solid fa-user-plus"></i>
+
+        </button>
+
+
+      </div>
+
+
+      <div
+        class="list"
+        id="memberList"
+      ></div>
+
+
+    </div>
+
+
+  </section>
+
+
+
+  <!-- =====================================================
+       GAMES
+  ====================================================== -->
+
+  <section
+    id="games"
+    class="hidden"
+  >
+
+
+    <div class="panel">
+
+
+      <div class="sectionHead">
+
+
+        <div>
+
+          <h2>
+            Game Library
+          </h2>
+
+
+          <div class="notice">
+
+            Games are searchable from the task form
+
+            and grouped by category.
+
+          </div>
+
+        </div>
+
+
+        <!-- ADD GAME -->
+
+        <button
+          class="primary add-icon-button"
+          id="addGame"
+          title="Add Game"
+          aria-label="Add Game"
         >
 
           <i class="fa-solid fa-plus"></i>
@@ -221,971 +1209,19 @@
       </div>
 
 
+      <div id="gameList"></div>
 
-      <!-- =====================================================
-           DASHBOARD
-      ====================================================== -->
 
-      <section id="dashboard">
+    </div>
 
 
-        <!-- STATISTICS -->
+  </section>
 
-        <div class="stats">
 
-
-          <!-- MEMBERS -->
-
-          <div class="stat">
-
-            <div class="statTop">
-
-              QA Members
-
-              <div class="statIcon">
-
-                <i class="fa-solid fa-users"></i>
-
-              </div>
-
-            </div>
-
-
-            <div
-              class="num"
-              id="sMembers"
-            >
-              0
-            </div>
-
-          </div>
-
-
-
-          <!-- ACTIVE -->
-
-          <div class="stat">
-
-            <div class="statTop">
-
-              Active Tasks
-
-              <div class="statIcon">
-
-                <i class="fa-solid fa-clock"></i>
-
-              </div>
-
-            </div>
-
-
-            <div
-              class="num"
-              id="sActive"
-            >
-              0
-            </div>
-
-          </div>
-
-
-
-          <!-- BLOCKED -->
-
-          <div class="stat">
-
-            <div class="statTop">
-
-              Blocked
-
-              <div class="statIcon">
-
-                <i class="fa-solid fa-triangle-exclamation"></i>
-
-              </div>
-
-            </div>
-
-
-            <div
-              class="num"
-              id="sBlocked"
-            >
-              0
-            </div>
-
-          </div>
-
-
-
-          <!-- COMPLETED -->
-
-          <div class="stat">
-
-            <div class="statTop">
-
-              Completed
-
-              <div class="statIcon">
-
-                <i class="fa-solid fa-circle-check"></i>
-
-              </div>
-
-            </div>
-
-
-            <div
-              class="num"
-              id="sDone"
-            >
-              0
-            </div>
-
-          </div>
-
-
-        </div>
-
-
-
-        <!-- TEAM CARDS -->
-
-        <div class="panel">
-
-
-          <div class="toolbar">
-
-
-            <input
-              class="field search"
-              id="dashSearch"
-              placeholder="Search member, task, game, ticket..."
-            >
-
-
-            <select
-              class="field"
-              id="dashStatus"
-            >
-
-              <option value="">
-                All statuses
-              </option>
-
-              <option>
-                To Do
-              </option>
-
-              <option>
-                In Progress
-              </option>
-
-              <option>
-                Blocked
-              </option>
-
-              <option>
-                For Review
-              </option>
-
-              <option>
-                Done
-              </option>
-
-            </select>
-
-
-          </div>
-
-
-          <div
-            class="team"
-            id="teamCards"
-          ></div>
-
-
-        </div>
-
-
-      </section>
-
-
-
-      <!-- =====================================================
-           ALL TASKS
-      ====================================================== -->
-
-      <section
-        id="tasks"
-        class="hidden"
-      >
-
-
-        <div class="panel">
-
-
-          <div class="toolbar">
-
-
-            <input
-              class="field search"
-              id="taskSearch"
-              placeholder="Search tasks..."
-            >
-
-
-            <select
-              class="field"
-              id="taskStatus"
-            >
-
-              <option value="">
-                All statuses
-              </option>
-
-              <option>
-                To Do
-              </option>
-
-              <option>
-                In Progress
-              </option>
-
-              <option>
-                Blocked
-              </option>
-
-              <option>
-                For Review
-              </option>
-
-              <option>
-                Done
-              </option>
-
-            </select>
-
-
-          </div>
-
-
-          <div class="tableWrap">
-
-
-            <table class="table">
-
-
-              <thead>
-
-                <tr>
-
-                  <th>Task</th>
-
-                  <th>Member</th>
-
-                  <th>Game</th>
-
-                  <th>Ticket</th>
-
-                  <th>Status</th>
-
-                  <th>Start</th>
-
-                  <th>Due</th>
-
-                  <th>Actions</th>
-
-                </tr>
-
-              </thead>
-
-
-              <tbody id="rows"></tbody>
-
-
-            </table>
-
-
-          </div>
-
-
-        </div>
-
-
-      </section>
-
-
-
-      <!-- =====================================================
-           BUG TRACKER
-      ====================================================== -->
-
-      <section
-        id="bugs"
-        class="hidden"
-      >
-
-
-        <div class="bugTrackerView">
-
-
-          <!-- BUG TRACKER HEADER -->
-
-          <div class="bugTrackerHeader">
-
-
-            <div class="bugTrackerTitle">
-
-              <div class="bugTrackerHeading">
-
-                <div class="bugTrackerHeadingIcon">
-
-                  <i class="fa-solid fa-bug"></i>
-
-                </div>
-
-                <div>
-
-                  <h1>
-                    Bug Tracker
-                  </h1>
-
-                  <p>
-                    Track and monitor reported bugs across all QA games.
-                  </p>
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-
-            <div class="bugTrackerActions">
-
-
-              <!-- ADD BUG -->
-
-              <button
-                type="button"
-                class="bugButton primary"
-                id="addBug"
-                title="Add Bug"
-              >
-
-                <i class="fa-solid fa-plus"></i>
-
-                Add Bug
-
-              </button>
-
-
-
-              <!-- IMPORT -->
-
-              <button
-                type="button"
-                class="bugButton"
-                id="importBugs"
-                title="Import bug tickets"
-              >
-
-                <i class="fa-solid fa-file-import"></i>
-
-                Import
-
-              </button>
-
-
-
-              <!-- CLEAR -->
-
-              <button
-                type="button"
-                class="bugButton danger"
-                id="clearBugs"
-                title="Clear all bug tickets"
-              >
-
-                <i class="fa-solid fa-trash-can"></i>
-
-                Clear
-
-              </button>
-
-
-
-              <!-- FILE INPUT -->
-
-              <input
-                type="file"
-                id="bugFileInput"
-                accept=".csv,.json,.xlsx,.xls"
-                hidden
-              >
-
-
-            </div>
-
-
-          </div>
-
-
-
-          <!-- =================================================
-               BUG STATISTICS
-          ================================================== -->
-
-          <div class="bugStats">
-
-
-            <!-- TOTAL -->
-
-            <div class="bugStat">
-
-              <div class="bugStatTop">
-
-                <div>
-
-                  <div class="bugStatLabel">
-                    Total Bugs
-                  </div>
-
-                  <div
-                    class="bugStatValue"
-                    id="bugTotal"
-                  >
-                    0
-                  </div>
-
-                </div>
-
-
-                <div class="bugStatIcon">
-
-                  <i class="fa-solid fa-bug"></i>
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-
-            <!-- OPEN -->
-
-            <div class="bugStat">
-
-              <div class="bugStatTop">
-
-                <div>
-
-                  <div class="bugStatLabel">
-                    Open
-                  </div>
-
-                  <div
-                    class="bugStatValue"
-                    id="bugOpen"
-                  >
-                    0
-                  </div>
-
-                </div>
-
-
-                <div class="bugStatIcon">
-
-                  <i class="fa-solid fa-folder-open"></i>
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-
-            <!-- IN PROGRESS -->
-
-            <div class="bugStat">
-
-              <div class="bugStatTop">
-
-                <div>
-
-                  <div class="bugStatLabel">
-                    In Progress
-                  </div>
-
-                  <div
-                    class="bugStatValue"
-                    id="bugProgress"
-                  >
-                    0
-                  </div>
-
-                </div>
-
-
-                <div class="bugStatIcon">
-
-                  <i class="fa-solid fa-spinner"></i>
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-
-            <!-- CLOSED -->
-
-            <div class="bugStat">
-
-              <div class="bugStatTop">
-
-                <div>
-
-                  <div class="bugStatLabel">
-                    Closed
-                  </div>
-
-                  <div
-                    class="bugStatValue"
-                    id="bugClosed"
-                  >
-                    0
-                  </div>
-
-                </div>
-
-
-                <div class="bugStatIcon">
-
-                  <i class="fa-solid fa-circle-check"></i>
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-
-            <!-- GAMES -->
-
-            <div class="bugStat">
-
-              <div class="bugStatTop">
-
-                <div>
-
-                  <div class="bugStatLabel">
-                    Games
-                  </div>
-
-                  <div
-                    class="bugStatValue"
-                    id="bugGameCount"
-                  >
-                    0
-                  </div>
-
-                </div>
-
-
-                <div class="bugStatIcon">
-
-                  <i class="fa-solid fa-gamepad"></i>
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-          </div>
-
-
-
-          <!-- =================================================
-               BUG FILTER TOOLBAR
-          ================================================== -->
-
-          <div class="bugToolbar">
-
-
-            <!-- SEARCH -->
-
-            <div class="bugSearchBox">
-
-              <i class="fa-solid fa-magnifying-glass"></i>
-
-              <input
-                type="text"
-                id="bugSearch"
-                placeholder="Search bug ID, title, ticket, or remarks..."
-                autocomplete="off"
-              >
-
-            </div>
-
-
-
-            <!-- GAME -->
-
-            <select
-              id="bugGameFilter"
-              class="field"
-            >
-
-              <option value="">
-                All Games
-              </option>
-
-            </select>
-
-
-
-            <!-- STATUS -->
-
-            <select
-              id="bugStatusFilter"
-              class="field"
-            >
-
-              <option value="">
-                All Statuses
-              </option>
-
-            </select>
-
-
-          </div>
-
-
-
-          <!-- =================================================
-               BUG TABLE
-          ================================================== -->
-
-          <div class="bugTableCard">
-
-
-            <div class="bugTableScroll">
-
-
-              <table class="bugTable">
-
-
-                <thead>
-
-                  <tr>
-
-                    <th>
-                      Game
-                    </th>
-
-                    <th>
-                      Build
-                    </th>
-
-                    <th>
-                      Ticket ID
-                    </th>
-
-                    <th>
-                      Bug Title
-                    </th>
-
-                    <th>
-                      Priority
-                    </th>
-
-                    <th>
-                      Date Created
-                    </th>
-
-                    <th>
-                      Status
-                    </th>
-
-                    <th>
-                      Created By
-                    </th>
-
-                    <th>
-                      Validated By
-                    </th>
-
-                    <th>
-                      Remarks
-                    </th>
-
-                    <th class="actionsColumn">
-                      Actions
-                    </th>
-
-                  </tr>
-
-                </thead>
-
-
-                <tbody id="bugTableBody">
-
-                  <!-- Bug rows rendered by bugTracker.js -->
-
-                </tbody>
-
-
-              </table>
-
-
-            </div>
-
-
-
-            <!-- =================================================
-                 PAGINATION
-            ================================================== -->
-
-            <div class="bugPagination">
-
-
-              <div
-                class="bugPaginationInfo"
-                id="bugPaginationInfo"
-              >
-                Showing 0–0 of 0 bugs
-              </div>
-
-
-
-              <div class="bugPaginationRight">
-
-
-                <!-- ROWS PER PAGE -->
-
-                <label class="bugPageSize">
-
-                  Rows:
-
-                  <select id="bugPageSize">
-
-                    <option value="10">
-                      10
-                    </option>
-
-                    <option value="25">
-                      25
-                    </option>
-
-                    <option value="50">
-                      50
-                    </option>
-
-                    <option value="100">
-                      100
-                    </option>
-
-                  </select>
-
-                </label>
-
-
-
-                <!-- PREVIOUS -->
-
-                <button
-                  type="button"
-                  class="bugPageButton"
-                  id="bugPrevPage"
-                  title="Previous page"
-                  aria-label="Previous page"
-                >
-
-                  <i class="fa-solid fa-chevron-left"></i>
-
-                </button>
-
-
-
-                <!-- PAGE NUMBERS -->
-
-                <div
-                  class="bugPageNumbers"
-                  id="bugPageNumbers"
-                ></div>
-
-
-
-                <!-- NEXT -->
-
-                <button
-                  type="button"
-                  class="bugPageButton"
-                  id="bugNextPage"
-                  title="Next page"
-                  aria-label="Next page"
-                >
-
-                  <i class="fa-solid fa-chevron-right"></i>
-
-                </button>
-
-
-              </div>
-
-
-            </div>
-
-
-          </div>
-
-
-        </div>
-
-
-      </section>
-
-
-
-      <!-- =====================================================
-           MEMBERS
-      ====================================================== -->
-
-      <section
-        id="team"
-        class="hidden"
-      >
-
-
-        <div class="panel">
-
-
-          <div class="sectionHead">
-
-
-            <div>
-
-              <h2>
-                QA Members
-              </h2>
-
-
-              <div class="notice">
-
-                Add, edit, or remove team members.
-
-                Removing a member also removes their assigned tasks.
-
-              </div>
-
-            </div>
-
-
-            <!-- ADD MEMBER -->
-
-            <button
-              class="primary add-icon-button"
-              id="addMember"
-              title="Add Member"
-              aria-label="Add Member"
-            >
-
-              <i class="fa-solid fa-user-plus"></i>
-
-            </button>
-
-
-          </div>
-
-
-          <div
-            class="list"
-            id="memberList"
-          ></div>
-
-
-        </div>
-
-
-      </section>
-
-
-
-      <!-- =====================================================
-           GAMES
-      ====================================================== -->
-
-      <section
-        id="games"
-        class="hidden"
-      >
-
-
-        <div class="panel">
-
-
-          <div class="sectionHead">
-
-
-            <div>
-
-              <h2>
-                Game Library
-              </h2>
-
-
-              <div class="notice">
-
-                Games are searchable from the task form
-
-                and grouped by category.
-
-              </div>
-
-            </div>
-
-
-            <!-- ADD GAME -->
-
-            <button
-              class="primary add-icon-button"
-              id="addGame"
-              title="Add Game"
-              aria-label="Add Game"
-            >
-
-              <i class="fa-solid fa-plus"></i>
-
-            </button>
-
-
-          </div>
-
-
-          <div id="gameList"></div>
-
-
-        </div>
-
-
-      </section>
-
-
-    </main>
-
+</main>
+```
 
   </div>
-
-
 
   <!-- =====================================================
        TASK MODAL
@@ -1196,229 +1232,229 @@
     id="taskModal"
   >
 
-    <div class="dialog">
+```
+<div class="dialog">
 
 
-      <h2 id="taskModalTitle">
-        Add Task
-      </h2>
+  <h2 id="taskModalTitle">
+    Add Task
+  </h2>
 
 
-      <form
-        class="form"
-        id="taskForm"
+  <form
+    class="form"
+    id="taskForm"
+  >
+
+
+    <input
+      type="hidden"
+      id="taskId"
+    >
+
+
+    <label>
+
+      QA Member
+
+      <select
+        id="memberField"
+        required
+      ></select>
+
+
+      <small
+        id="memberLockHint"
+        class="member-lock-hint hidden"
       >
+
+        <i class="fa-solid fa-lock"></i>
+
+        This task is being added for this QA member.
+
+      </small>
+
+    </label>
+
+
+
+    <label>
+
+      Task
+
+      <input
+        id="taskField"
+        required
+        placeholder="e.g. Regression Testing – RC4"
+      >
+
+    </label>
+
+
+
+    <label>
+
+      Game
+
+
+      <div class="gamePicker">
 
 
         <input
-          type="hidden"
-          id="taskId"
+          id="gameField"
+          autocomplete="off"
+          required
+          placeholder="Type a game name..."
         >
 
 
-        <label>
+        <div
+          class="suggestions hidden"
+          id="gameSuggestions"
+        ></div>
 
-          QA Member
 
-          <select
-            id="memberField"
-            required
-          ></select>
+      </div>
 
 
-          <small
-            id="memberLockHint"
-            class="member-lock-hint hidden"
-          >
+    </label>
 
-            <i class="fa-solid fa-lock"></i>
 
-            This task is being added for this QA member.
 
-          </small>
+    <div class="two">
 
-        </label>
 
+      <label>
 
+        Start Date
 
-        <label>
+        <input
+          id="startField"
+          type="date"
+          required
+        >
 
-          Task
+      </label>
 
-          <input
-            id="taskField"
-            required
-            placeholder="e.g. Regression Testing – RC4"
-          >
 
-        </label>
+      <label>
 
+        Due Date
 
+        <input
+          id="dueField"
+          type="date"
+        >
 
-        <label>
-
-          Game
-
-
-          <div class="gamePicker">
-
-
-            <input
-              id="gameField"
-              autocomplete="off"
-              required
-              placeholder="Type a game name..."
-            >
-
-
-            <div
-              class="suggestions hidden"
-              id="gameSuggestions"
-            ></div>
-
-
-          </div>
-
-
-        </label>
-
-
-
-        <div class="two">
-
-
-          <label>
-
-            Start Date
-
-            <input
-              id="startField"
-              type="date"
-              required
-            >
-
-          </label>
-
-
-          <label>
-
-            Due Date
-
-            <input
-              id="dueField"
-              type="date"
-            >
-
-          </label>
-
-
-        </div>
-
-
-
-        <div class="two">
-
-
-          <label>
-
-            Ticket / Issue
-
-            <input
-              id="ticketField"
-              placeholder="e.g. QA-123"
-            >
-
-          </label>
-
-
-
-          <label>
-
-            Status
-
-
-            <select id="statusField">
-
-              <option>
-                To Do
-              </option>
-
-              <option>
-                In Progress
-              </option>
-
-              <option>
-                Blocked
-              </option>
-
-              <option>
-                For Review
-              </option>
-
-              <option>
-                Done
-              </option>
-
-            </select>
-
-
-          </label>
-
-
-        </div>
-
-
-
-        <label>
-
-          Remarks
-
-
-          <textarea
-            id="remarksField"
-            placeholder="Notes, blockers, build/version, etc."
-          ></textarea>
-
-
-        </label>
-
-
-
-        <div class="actions">
-
-
-          <button
-            type="button"
-            class="secondary"
-            id="cancelTask"
-          >
-
-            Cancel
-
-          </button>
-
-
-          <button
-            type="submit"
-            class="primary"
-          >
-
-            Save Task
-
-          </button>
-
-
-        </div>
-
-
-      </form>
+      </label>
 
 
     </div>
 
+
+
+    <div class="two">
+
+
+      <label>
+
+        Ticket / Issue
+
+        <input
+          id="ticketField"
+          placeholder="e.g. QA-123"
+        >
+
+      </label>
+
+
+
+      <label>
+
+        Status
+
+
+        <select id="statusField">
+
+          <option>
+            To Do
+          </option>
+
+          <option>
+            In Progress
+          </option>
+
+          <option>
+            Blocked
+          </option>
+
+          <option>
+            For Review
+          </option>
+
+          <option>
+            Done
+          </option>
+
+        </select>
+
+
+      </label>
+
+
+    </div>
+
+
+
+    <label>
+
+      Remarks
+
+
+      <textarea
+        id="remarksField"
+        placeholder="Notes, blockers, build/version, etc."
+      ></textarea>
+
+
+    </label>
+
+
+
+    <div class="actions">
+
+
+      <button
+        type="button"
+        class="secondary"
+        id="cancelTask"
+      >
+
+        Cancel
+
+      </button>
+
+
+      <button
+        type="submit"
+        class="primary"
+      >
+
+        Save Task
+
+      </button>
+
+
+    </div>
+
+
+  </form>
+
+
+</div>
+```
+
   </div>
-
-
 
   <!-- =====================================================
        MEMBER MODAL
@@ -1429,74 +1465,74 @@
     id="memberModal"
   >
 
-    <div class="dialog">
+```
+<div class="dialog">
 
 
-      <h2 id="memberTitle">
-        Add Member
-      </h2>
+  <h2 id="memberTitle">
+    Add Member
+  </h2>
 
 
-      <form
-        class="form"
-        id="memberForm"
+  <form
+    class="form"
+    id="memberForm"
+  >
+
+
+    <input
+      type="hidden"
+      id="memberOld"
+    >
+
+
+    <label>
+
+      Member Name
+
+      <input
+        id="memberName"
+        required
       >
 
-
-        <input
-          type="hidden"
-          id="memberOld"
-        >
-
-
-        <label>
-
-          Member Name
-
-          <input
-            id="memberName"
-            required
-          >
-
-        </label>
+    </label>
 
 
 
-        <div class="actions">
+    <div class="actions">
 
 
-          <button
-            type="button"
-            class="secondary"
-            id="cancelMember"
-          >
+      <button
+        type="button"
+        class="secondary"
+        id="cancelMember"
+      >
 
-            Cancel
+        Cancel
 
-          </button>
-
-
-          <button
-            type="submit"
-            class="primary"
-          >
-
-            Save Member
-
-          </button>
+      </button>
 
 
-        </div>
+      <button
+        type="submit"
+        class="primary"
+      >
 
+        Save Member
 
-      </form>
+      </button>
 
 
     </div>
 
+
+  </form>
+
+
+</div>
+```
+
   </div>
-
-
 
   <!-- =====================================================
        GAME MODAL
@@ -1507,98 +1543,98 @@
     id="gameModal"
   >
 
-    <div class="dialog">
+```
+<div class="dialog">
 
 
-      <h2 id="gameTitle">
-        Add Game
-      </h2>
+  <h2 id="gameTitle">
+    Add Game
+  </h2>
 
 
-      <form
-        class="form"
-        id="gameForm"
+  <form
+    class="form"
+    id="gameForm"
+  >
+
+
+    <input
+      type="hidden"
+      id="gameOld"
+    >
+
+
+    <label>
+
+      Game Name
+
+      <input
+        id="gameName"
+        required
       >
 
-
-        <input
-          type="hidden"
-          id="gameOld"
-        >
-
-
-        <label>
-
-          Game Name
-
-          <input
-            id="gameName"
-            required
-          >
-
-        </label>
+    </label>
 
 
 
-        <label>
+    <label>
 
-          Category
-
-
-          <select id="gameCategory">
-
-            <option>
-              Bingo Games
-            </option>
-
-            <option>
-              Slot Games
-            </option>
-
-          </select>
+      Category
 
 
-        </label>
+      <select id="gameCategory">
+
+        <option>
+          Bingo Games
+        </option>
+
+        <option>
+          Slot Games
+        </option>
+
+      </select>
+
+
+    </label>
 
 
 
-        <div class="actions">
+    <div class="actions">
 
 
-          <button
-            type="button"
-            class="secondary"
-            id="cancelGame"
-          >
+      <button
+        type="button"
+        class="secondary"
+        id="cancelGame"
+      >
 
-            Cancel
+        Cancel
 
-          </button>
-
-
-          <button
-            type="submit"
-            class="primary"
-          >
-
-            Save Game
-
-          </button>
+      </button>
 
 
-        </div>
+      <button
+        type="submit"
+        class="primary"
+      >
 
+        Save Game
 
-      </form>
+      </button>
 
 
     </div>
 
+
+  </form>
+
+
+</div>
+```
+
   </div>
 
-
-
-    <!-- =====================================================
+  <!-- =====================================================
        BUG ADD / EDIT MODAL
   ====================================================== -->
 
@@ -1607,344 +1643,377 @@
     id="bugModal"
   >
 
-    <div class="dialog bugFormDialog">
+```
+<div class="dialog bugFormDialog">
 
 
-      <!-- HEADER -->
+  <!-- HEADER -->
 
-      <div class="bugModalHeader">
-
-
-        <div>
-
-          <span class="modal-eyebrow">
-            BUG TRACKER
-          </span>
+  <div class="bugModalHeader">
 
 
-          <h2 id="bugModalTitle">
-            Add Bug
-          </h2>
+    <div>
+
+      <span class="modal-eyebrow">
+        BUG TRACKER
+      </span>
 
 
-          <p id="bugModalSubtitle">
-            Add a bug ticket for tracking.
-          </p>
-
-        </div>
+      <h2 id="bugModalTitle">
+        Add Bug
+      </h2>
 
 
-        <button
-          type="button"
-          class="modal-close"
-          id="closeBugModal"
-          title="Close"
-          aria-label="Close"
-        >
+      <p id="bugModalSubtitle">
+        Add a bug ticket for tracking.
+      </p>
 
-          <i class="fa-solid fa-xmark"></i>
-
-        </button>
+    </div>
 
 
-      </div>
+    <button
+      type="button"
+      class="modal-close"
+      id="closeBugModal"
+      title="Close"
+      aria-label="Close"
+    >
+
+      <i class="fa-solid fa-xmark"></i>
+
+    </button>
+
+
+  </div>
 
 
 
-      <!-- FORM -->
+  <!-- FORM -->
 
-      <form
-        class="form bugForm"
-        id="bugForm"
+  <form
+    class="form bugForm"
+    id="bugForm"
+  >
+
+
+    <!-- INTERNAL ID -->
+
+    <input
+      type="hidden"
+      id="bugId"
+    >
+
+
+
+    <!-- =================================================
+         1. BUILD
+    ================================================== -->
+
+    <label>
+
+      Build
+
+      <input
+        id="bugBuildField"
+        name="build"
+        placeholder="e.g. 1.2.0 RC4"
       >
 
+    </label>
 
-        <!-- INTERNAL ID -->
 
-        <input
-          type="hidden"
-          id="bugId"
+
+    <!-- =================================================
+         2. TICKET URL
+    ================================================== -->
+
+    <label>
+
+      Ticket URL
+
+      <input
+        id="bugTicketUrlField"
+        name="ticketUrl"
+        type="url"
+        placeholder="https://gitlab.example.com/.../issues/468"
+      >
+
+      <small class="fieldHint">
+
+        The tracker automatically extracts the ticket number
+        and displays it as #468.
+
+      </small>
+
+    </label>
+
+
+
+    <!-- =================================================
+         3. GAME
+    ================================================== -->
+
+    <label>
+
+      Game
+
+      <select
+        id="bugGameField"
+        name="game"
+        required
+      >
+
+        <option value="">
+          Select game
+        </option>
+
+      </select>
+
+    </label>
+
+
+
+    <!-- =================================================
+         4. CATEGORY
+    ================================================== -->
+
+    <label>
+
+      Category
+
+      <select
+        id="bugCategoryField"
+        name="category"
+      >
+
+        <option value="">
+          Auto-detect from game
+        </option>
+
+        <option value="Bingo Games">
+          Bingo Games
+        </option>
+
+        <option value="Slot Games">
+          Slot Games
+        </option>
+
+      </select>
+
+    </label>
+
+
+
+    <!-- =================================================
+         5. BUG TITLE
+    ================================================== -->
+
+    <label>
+
+      Bug Title
+
+      <input
+        id="bugTitleField"
+        name="bugTitle"
+        required
+        placeholder="Enter the bug title..."
+      >
+
+    </label>
+
+
+
+    <!-- =================================================
+         6. PRIORITY
+    ================================================== -->
+
+    <label>
+
+      Priority
+
+      <select
+        id="bugPriorityField"
+        name="priority"
+      >
+
+        <option value="Low">
+          Low
+        </option>
+
+        <option
+          value="Medium"
+          selected
         >
+          Medium
+        </option>
 
+        <option value="High">
+          High
+        </option>
 
+        <option value="Showstopper">
+          Showstopper
+        </option>
 
-        <!-- GAME / BUILD -->
+      </select>
 
-        <div class="two">
+    </label>
 
 
-          <label>
 
-            Game
+    <!-- =================================================
+         7. DATE CREATED
+    ================================================== -->
 
-            <select
-              id="bugGameField"
-              name="game"
-              required
-            >
+    <label>
 
-              <option value="">
-                Select game
-              </option>
+      Date Created
 
-            </select>
+      <input
+        id="bugDateField"
+        name="dateCreated"
+        type="date"
+        required
+      >
 
-          </label>
+    </label>
 
 
 
-          <label>
+    <!-- =================================================
+         8. STATUS
+    ================================================== -->
 
-            Build
+    <label>
 
-            <input
-              id="bugBuildField"
-              name="build"
-              placeholder="e.g. 1.2.0 RC4"
-            >
+      Status
 
-          </label>
+      <select
+        id="bugStatusField"
+        name="status"
+      >
 
+        <option value="Open">
+          Open
+        </option>
 
-        </div>
+        <option value="In Progress">
+          In Progress
+        </option>
 
+        <option value="For Review">
+          For Review
+        </option>
 
+        <option value="Closed">
+          Closed
+        </option>
 
-        <!-- TICKET ID / PRIORITY -->
+        <option value="Reopened">
+          Reopened
+        </option>
 
-        <div class="two">
+      </select>
 
+    </label>
 
 
 
-          </label>
+    <!-- =================================================
+         9. CREATED BY
+    ================================================== -->
 
+    <label>
 
+      Created By
 
-          <label>
+      <input
+        id="bugCreatedByField"
+        name="createdBy"
+        placeholder="QA member"
+      >
 
-            Priority
+    </label>
 
-            <select
-              id="bugPriorityField"
-              name="priority"
-            >
 
-              <option value="Low">
-                Low
-              </option>
 
-              <option
-                value="Medium"
-                selected
-              >
-                Medium
-              </option>
+    <!-- =================================================
+         10. VALIDATED BY
+    ================================================== -->
 
-              <option value="High">
-                High
-              </option>
+    <label>
 
-              <option value="Critical">
-                Critical
-              </option>
+      Validated By
 
-              <option value="Showstopper">
-                Showstopper
-              </option>
+      <input
+        id="bugValidatedByField"
+        name="validatedBy"
+        placeholder="QA member"
+      >
 
-            </select>
+    </label>
 
-          </label>
 
 
-        </div>
+    <!-- =================================================
+         11. REMARKS
+    ================================================== -->
 
+    <label>
 
+      Remarks
 
-        <!-- TICKET URL -->
+      <textarea
+        id="bugRemarksField"
+        name="remarks"
+        rows="4"
+        placeholder="Add notes, validation remarks, or other tracking information..."
+      ></textarea>
 
-        <label>
+    </label>
 
-          Ticket URL
 
-          <input
-            id="bugTicketUrlField"
-            name="ticketUrl"
-            type="text"
-            placeholder="Paste the ticket URL..."
-          >
 
-        </label>
+    <!-- ACTIONS -->
 
+    <div class="actions">
 
 
-        <!-- BUG TITLE -->
+      <button
+        type="button"
+        class="secondary"
+        id="cancelBug"
+      >
 
-        <label>
+        Cancel
 
-          Bug Title
+      </button>
 
-          <input
-            id="bugTitleField"
-            name="bugTitle"
-            required
-            placeholder="Enter the bug title..."
-          >
 
-        </label>
+      <button
+        type="submit"
+        class="primary"
+        id="saveBug"
+      >
 
+        <i class="fa-solid fa-check"></i>
 
+        Save Bug
 
-        <!-- DATE / STATUS -->
-
-        <div class="two">
-
-
-          <label>
-
-            Date Created
-
-            <input
-              id="bugDateField"
-              name="dateCreated"
-              type="date"
-              required
-            >
-
-          </label>
-
-
-
-          <label>
-
-            Status
-
-            <select
-              id="bugStatusField"
-              name="status"
-            >
-
-              <option value="Open">
-                Open
-              </option>
-
-              <option value="In Progress">
-                In Progress
-              </option>
-
-              <option value="For Review">
-                For Review
-              </option>
-
-              <option value="Closed">
-                Closed
-              </option>
-
-              <option value="Reopened">
-                Reopened
-              </option>
-
-            </select>
-
-          </label>
-
-
-        </div>
-
-
-
-        <!-- CREATED / VALIDATED -->
-
-        <div class="two">
-
-
-          <label>
-
-            Created By
-
-            <input
-              id="bugCreatedByField"
-              name="createdBy"
-              placeholder="QA member"
-            >
-
-          </label>
-
-
-
-          <label>
-
-            Validated By
-
-            <input
-              id="bugValidatedByField"
-              name="validatedBy"
-              placeholder="QA member"
-            >
-
-          </label>
-
-
-        </div>
-
-
-
-        <!-- REMARKS -->
-
-        <label>
-
-          Remarks
-
-          <textarea
-            id="bugRemarksField"
-            name="remarks"
-            rows="4"
-            placeholder="Add notes, validation remarks, or other tracking information..."
-          ></textarea>
-
-        </label>
-
-
-
-        <!-- ACTIONS -->
-
-        <div class="actions">
-
-
-          <button
-            type="button"
-            class="secondary"
-            id="cancelBug"
-          >
-
-            Cancel
-
-          </button>
-
-
-          <button
-            type="submit"
-            class="primary"
-            id="saveBug"
-          >
-
-            <i class="fa-solid fa-check"></i>
-
-            Save Bug
-
-          </button>
-
-
-        </div>
-
-
-      </form>
+      </button>
 
 
     </div>
 
+
+  </form>
+
+
+</div>
+```
+
   </div>
+
   <!-- =====================================================
        BUG DETAILS MODAL
   ====================================================== -->
@@ -1954,218 +2023,222 @@
     id="bugDetailsModal"
   >
 
-    <div class="dialog bug-details-dialog">
+```
+<div class="dialog bug-details-dialog">
 
 
-      <div class="bug-modal-header">
-
-
-        <div>
-
-          <span class="modal-eyebrow">
-            BUG DETAILS
-          </span>
-
-
-          <h2 id="bugDetailsTitle">
-            Bug Details
-          </h2>
-
-        </div>
-
-
-
-        <button
-          class="modal-close"
-          id="closeBugDetails"
-          type="button"
-          title="Close"
-          aria-label="Close"
-        >
-
-          <i class="fa-solid fa-xmark"></i>
-
-        </button>
-
-
-      </div>
-
-
-
-      <div
-        id="bugDetailsContent"
-        class="bug-details-content"
-      ></div>
-
-
-    </div>
-
-  </div>
-
-
-
-  <!-- =====================================================
-     BUG IMPORT MODAL
-====================================================== -->
-
-<div
-  class="modal"
-  id="bugImportModal"
->
-
-  <div class="dialog importDialog">
-
-    <!-- HEADER -->
-    <div class="bugDialogHeader">
-
-      <div class="bugDialogHeaderText">
-
-        <span class="modal-eyebrow">
-          IMPORT BUGS
-        </span>
-
-        <h2>
-          Import Bug Tickets
-        </h2>
-
-        <p>
-          Import existing bug tickets into the tracker.
-        </p>
-
-      </div>
-
-      <button
-        type="button"
-        class="bugModalClose"
-        id="closeBugImport"
-        title="Close"
-        aria-label="Close"
-      >
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-
-    </div>
-
-
-    <!-- CONTENT -->
-    <div class="bugImportContent">
-
-      <!-- DROPZONE -->
-      <div class="bugDropzone">
-
-        <div class="bugDropIcon">
-          <i class="fa-solid fa-file-arrow-up"></i>
-        </div>
-
-        <h3>
-          Import your bug file
-        </h3>
-
-        <p>
-          Upload a CSV, JSON, or Excel file containing your bug tickets.
-        </p>
-
-        <button
-          type="button"
-          class="bugButton primary"
-          id="selectBugFile"
-        >
-          <i class="fa-solid fa-folder-open"></i>
-          Choose File
-        </button>
-
-      </div>
-
-
-      <!-- IMPORT INFORMATION -->
-      <div class="importInfo">
-
-        <div class="importInfoTitle">
-          <i class="fa-solid fa-circle-info"></i>
-
-          <strong>
-            Supported fields
-          </strong>
-        </div>
-
-        <p>
-          Game, Build, Ticket ID, Ticket URL, Bug Title, Priority,
-          Date Created, Status, Created By, Validated By, Remarks.
-        </p>
-
-      </div>
-
-
-      <!-- TRACKING NOTICE -->
-      <div class="importInfo importInfoSecondary">
-
-        <div class="importInfoTitle">
-
-          <i class="fa-solid fa-clipboard-check"></i>
-
-          <strong>
-            Import only
-          </strong>
-
-        </div>
-
-        <p>
-          This section is for tracking existing bug tickets.
-          It does not require test evidence or bug categories.
-        </p>
-
-      </div>
-
-
-      <!-- IMPORT PREVIEW -->
-      <div
-        class="importPreview"
-        id="bugImportPreview"
-      ></div>
-
-    </div>
-
-  </div>
-
-</div>
-
-
-
-
-  <!-- =====================================================
-       NOTIFICATION
-  ====================================================== -->
-
-  <div
-    id="notification"
-    class="notification"
-  >
-
-
-    <div class="notification-icon">
-
-      <i class="fa-solid fa-check"></i>
-
-    </div>
+  <div class="bug-modal-header">
 
 
     <div>
 
-      <strong id="notificationTitle">
-        Success
-      </strong>
+      <span class="modal-eyebrow">
+        BUG DETAILS
+      </span>
 
 
-      <p id="notificationMessage">
-        Action completed.
+      <h2 id="bugDetailsTitle">
+        Bug Details
+      </h2>
+
+    </div>
+
+
+
+    <button
+      class="modal-close"
+      id="closeBugDetails"
+      type="button"
+      title="Close"
+      aria-label="Close"
+    >
+
+      <i class="fa-solid fa-xmark"></i>
+
+    </button>
+
+
+  </div>
+
+
+
+  <div
+    id="bugDetailsContent"
+    class="bug-details-content"
+  ></div>
+
+
+</div>
+```
+
+  </div>
+
+  <!-- =====================================================
+       BUG IMPORT MODAL
+  ====================================================== -->
+
+  <div
+    class="modal"
+    id="bugImportModal"
+  >
+
+```
+<div class="dialog importDialog">
+
+
+  <!-- HEADER -->
+
+  <div class="bugDialogHeader">
+
+    <div class="bugDialogHeaderText">
+
+      <span class="modal-eyebrow">
+        IMPORT BUGS
+      </span>
+
+      <h2>
+        Import Bug Tickets
+      </h2>
+
+      <p>
+        Import existing bug tickets into the tracker.
       </p>
 
     </div>
 
 
+    <button
+      type="button"
+      class="bugModalClose"
+      id="closeBugImport"
+      title="Close"
+      aria-label="Close"
+    >
+
+      <i class="fa-solid fa-xmark"></i>
+
+    </button>
+
   </div>
 
 
+
+  <!-- CONTENT -->
+
+  <div class="bugImportContent">
+
+
+    <!-- DROPZONE -->
+
+    <div class="bugDropzone">
+
+      <div class="bugDropIcon">
+
+        <i class="fa-solid fa-file-arrow-up"></i>
+
+      </div>
+
+      <h3>
+        Import your bug file
+      </h3>
+
+      <p>
+        Upload a CSV, JSON, Excel, TSV, TXT, or DOCX file containing your bug tickets.
+      </p>
+
+      <button
+        type="button"
+        class="bugButton primary"
+        id="selectBugFile"
+      >
+
+        <i class="fa-solid fa-folder-open"></i>
+
+        Choose File
+
+      </button>
+
+    </div>
+
+
+
+    <!-- IMPORT INFORMATION -->
+
+    <div class="importInfo">
+
+      <div class="importInfoTitle">
+
+        <i class="fa-solid fa-circle-info"></i>
+
+        <strong>
+          Supported fields
+        </strong>
+
+      </div>
+
+      <p>
+
+        Build, Ticket URL, Game, Category, Bug Title,
+        Priority, Date Created, Status, Created By,
+        Validated By, Remarks.
+
+      </p>
+
+    </div>
+
+
+
+    <!-- TRACKING NOTICE -->
+
+    <div class="importInfo importInfoSecondary">
+
+      <div class="importInfoTitle">
+
+        <i class="fa-solid fa-clipboard-check"></i>
+
+        <strong>
+          Import only
+        </strong>
+
+      </div>
+
+      <p>
+
+        This section is for tracking existing bug tickets.
+        It does not require test evidence or additional bug categories.
+
+      </p>
+
+    </div>
+
+
+
+    <!-- IMPORT PREVIEW -->
+
+    <div
+      class="importPreview"
+      id="bugImportPreview"
+    ></div>
+
+
+  </div>
+
+
+</div>
+```
+
+  </div>
+
+  <!-- =====================================================
+       GLOBAL NOTIFICATION CONTAINER
+  ====================================================== -->
+
+  <div
+    id="notificationContainer"
+    class="notification-container"
+    aria-live="polite"
+    aria-atomic="true"
+  ></div>
 
   <!-- =====================================================
        SHEETJS
@@ -2176,7 +2249,14 @@
     src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"
   ></script>
 
+  <!-- =====================================================
+       MAMMOTH
+       Required for DOCX imports
+  ====================================================== -->
 
+  <script
+    src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"
+  ></script>
 
   <!-- =====================================================
        JAVASCRIPT ENTRY POINT
@@ -2186,7 +2266,6 @@
     type="module"
     src="./js/app.js"
   ></script>
-
 
 </body>
 

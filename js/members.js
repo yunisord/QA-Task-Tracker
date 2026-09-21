@@ -7,12 +7,16 @@ import {
 import {
   $,
   esc,
-  initials
+  initials,
+  showNotification,
+  notifyDataChanged
 } from "./utils.js";
 
 import {
   openModal,
-  closeModal
+  closeModal,
+  showCenterAlert,
+  showCenterConfirm
 } from "./modals.js";
 
 
@@ -61,20 +65,24 @@ export function renderMembers() {
             <div class="iconBtns">
 
               <button
+                type="button"
                 class="iconBtn edit-member"
                 title="Edit"
+                aria-label="Edit Member"
                 data-name="${esc(member)}"
               >
-                ✎
+                <i class="fa-solid fa-pen"></i>
               </button>
 
 
               <button
+                type="button"
                 class="iconBtn danger delete-member"
                 title="Delete"
+                aria-label="Delete Member"
                 data-name="${esc(member)}"
               >
-                ×
+                <i class="fa-solid fa-trash"></i>
               </button>
 
             </div>
@@ -173,7 +181,7 @@ export function setupMemberForm() {
   $("memberForm")
     .addEventListener(
       "submit",
-      event => {
+      async event => {
 
         event.preventDefault();
 
@@ -188,7 +196,17 @@ export function setupMemberForm() {
             .trim();
 
 
+        /*
+         * Member name validation.
+         */
+
         if (!newName) {
+
+          await showCenterAlert(
+            "Please enter a member name.",
+            "Member Name Required"
+          );
+
           return;
         }
 
@@ -202,10 +220,15 @@ export function setupMemberForm() {
           );
 
 
+        /*
+         * Duplicate member validation.
+         */
+
         if (duplicate) {
 
-          alert(
-            "That member already exists."
+          await showCenterAlert(
+            "That member already exists.",
+            "Duplicate Member"
           );
 
           return;
@@ -225,6 +248,11 @@ export function setupMemberForm() {
 
           }
 
+
+          /*
+           * Update all existing tasks
+           * assigned to the renamed member.
+           */
 
           tasks.forEach(task => {
 
@@ -248,9 +276,30 @@ export function setupMemberForm() {
 
         saveData();
 
+
         closeModal("memberModal");
 
+
+        /*
+         * Refresh all dependent views
+         * immediately.
+         */
+
+        notifyDataChanged();
+
+
         renderMembers();
+
+
+        showNotification(
+          oldName
+            ? "Member changes have been saved."
+            : "New member has been added.",
+          "success",
+          oldName
+            ? "Member updated"
+            : "Member added"
+        );
 
       }
     );
@@ -262,13 +311,19 @@ export function setupMemberForm() {
    DELETE MEMBER
 ========================= */
 
-export function deleteMember(
+export async function deleteMember(
   name
 ) {
 
+  /*
+   * Use the centered confirmation
+   * modal instead of browser confirm().
+   */
+
   const confirmed =
-    confirm(
-      `Delete ${name}? Their assigned tasks will also be deleted.`
+    await showCenterConfirm(
+      `Delete ${name}? Their assigned tasks will also be deleted.`,
+      "Delete Member"
     );
 
 
@@ -289,6 +344,11 @@ export function deleteMember(
   }
 
 
+  /*
+   * Remove all tasks assigned
+   * to the deleted member.
+   */
+
   for (
     let index = tasks.length - 1;
     index >= 0;
@@ -308,6 +368,23 @@ export function deleteMember(
 
   saveData();
 
+
+  /*
+   * Refresh all dependent views
+   * immediately.
+   */
+
+  notifyDataChanged();
+
+
   renderMembers();
 
+
+  showNotification(
+    `"${name}" has been deleted.`,
+    "success",
+    "Member deleted"
+  );
+
 }
+
