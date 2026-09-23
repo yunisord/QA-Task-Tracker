@@ -2097,18 +2097,143 @@ function readExcel(
 
 
             /*
-              Use the first worksheet.
+              Prefer the worksheet containing
+              the required bug tracker headers.
+
+              This allows Excel files to have
+              dashboard/progress sheets before
+              the actual bug list.
             */
 
-            const firstSheet =
-              workbook.Sheets[
-                workbook.SheetNames[0]
-              ];
+            const requiredHeaders = [
+              "Build",
+              "Ticket URL",
+              "Game",
+              "Category",
+              "Bug Title",
+              "Priority",
+              "Date Created",
+              "Status",
+              "Created By",
+              "Validated By",
+              "Remarks"
+            ];
+
+
+            const normalizeHeader =
+              value =>
+                String(
+                  value ?? ""
+                )
+                  .trim()
+                  .toLowerCase()
+                  .replace(
+                    /[\s_\-./\\]+/g,
+                    ""
+                  );
+
+
+            let selectedSheet =
+              null;
+
+
+            for (
+              const sheetName
+              of workbook.SheetNames
+            ) {
+
+              const sheet =
+                workbook.Sheets[
+                  sheetName
+                ];
+
+
+              const rows =
+                XLSX.utils.sheet_to_json(
+                  sheet,
+                  {
+                    header: 1,
+                    defval: "",
+                    raw: false
+                  }
+                );
+
+
+              if (
+                !rows.length
+              ) {
+                continue;
+              }
+
+
+              const normalizedRequired =
+                requiredHeaders.map(
+                  normalizeHeader
+                );
+
+
+              const hasRequiredHeaders =
+                rows.some(
+                  row => {
+
+                    if (
+                      !Array.isArray(row)
+                    ) {
+                      return false;
+                    }
+
+
+                    const normalizedRow =
+                      row.map(
+                        normalizeHeader
+                      );
+
+
+                    return normalizedRequired.every(
+                      header =>
+                        normalizedRow.includes(
+                          header
+                        )
+                    );
+
+                  }
+                );
+
+
+              if (
+                hasRequiredHeaders
+              ) {
+
+                selectedSheet =
+                  sheet;
+
+                break;
+
+              }
+
+            }
+
+
+            /*
+              Fallback to the first sheet
+              if no matching bug sheet exists.
+            */
+
+            if (
+              !selectedSheet
+            ) {
+
+              selectedSheet =
+                workbook.Sheets[
+                  workbook.SheetNames[0]
+                ];
+
+            }
 
 
             const data =
               XLSX.utils.sheet_to_json(
-                firstSheet,
+                selectedSheet,
                 {
                   defval: "",
                   raw: false

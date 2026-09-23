@@ -30,6 +30,14 @@
   --radius-lg: 14px;
 }
 
+/* =========================================================
+   PAGE VISIBILITY
+========================================================= */
+
+.hidden {
+  display: none !important;
+}
+
 
 /* =========================================================
    GLOBAL
@@ -2022,15 +2030,19 @@ button {
 
   right: 0;
 
+  box-sizing: border-box;
+
   width: 125px;
-
   min-width: 125px;
-
   max-width: 125px;
+
+  padding: 10px 8px;
 
   background: #fff;
 
   overflow: hidden;
+
+  white-space: nowrap;
 
   z-index: 6;
 
@@ -2038,16 +2050,96 @@ button {
     -6px 0 10px rgba(0, 0, 0, .06);
 }
 
+
+/* =========================================================
+   ACTIONS HEADER
+========================================================= */
+
 .bugTable thead th.actionsColumn,
 .bug-table thead th.actionsColumn {
   background: #f8f9fc;
 
+  overflow: hidden;
+
+  white-space: nowrap;
+
+  text-overflow: clip;
+
   z-index: 10;
 }
+
+
+/* =========================================================
+   ACTIONS CELL CONTENT
+========================================================= */
+
+.bugTable td.actionsColumn > *,
+.bug-table td.actionsColumn > * {
+  box-sizing: border-box;
+
+  max-width: 100%;
+
+  min-width: 0;
+
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   ACTION BUTTON CONTAINER
+========================================================= */
+
+.bugTable td.actionsColumn .action-buttons,
+.bugTable td.actionsColumn .actions,
+.bugTable td.actionsColumn .actionButtons,
+.bug-table td.actionsColumn .action-buttons,
+.bug-table td.actionsColumn .actions,
+.bug-table td.actionsColumn .actionButtons {
+  box-sizing: border-box;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: flex-start;
+
+  gap: 5px;
+
+  width: 100%;
+
+  max-width: 100%;
+
+  min-width: 0;
+
+  overflow: hidden;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   ACTION BUTTONS
+========================================================= */
+
+.bugTable td.actionsColumn button,
+.bug-table td.actionsColumn button {
+  box-sizing: border-box;
+
+  flex: 0 0 auto;
+
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   ACTION COLUMN ALIGNMENT
+========================================================= */
 
 .actionsColumn {
   text-align: center !important;
 }
+
+
 
 
 /* =========================================================
@@ -5097,4 +5189,117 @@ button {
 
     transition-duration: .01ms !important;
   }
+}
+/* =========================================================
+   BUG TRACKER - GAME DROPDOWN
+========================================================= */
+
+#bugGame,
+#bugGameEdit,
+select[name="game"],
+.bugForm select,
+.bug-form select {
+  box-sizing: border-box;
+
+  width: 100%;
+
+  min-height: 40px;
+
+  padding: 9px 36px 9px 12px;
+
+  border: 1px solid #d7dce5;
+
+  border-radius: 8px;
+
+  background-color: #fff;
+
+  color: #374151;
+
+  font-family: inherit;
+
+  font-size: 13px;
+
+  line-height: 1.4;
+
+  cursor: pointer;
+
+  outline: none;
+
+  appearance: auto;
+
+  -webkit-appearance: auto;
+
+  transition:
+    border-color .15s ease,
+    box-shadow .15s ease,
+    background-color .15s ease;
+}
+
+
+/* =========================================================
+   GAME DROPDOWN - HOVER
+========================================================= */
+
+#bugGame:hover,
+#bugGameEdit:hover,
+select[name="game"]:hover,
+.bugForm select:hover,
+.bug-form select:hover {
+  border-color: #b8c0ce;
+
+  background-color: #fff;
+}
+
+
+/* =========================================================
+   GAME DROPDOWN - FOCUS
+========================================================= */
+
+#bugGame:focus,
+#bugGameEdit:focus,
+select[name="game"]:focus,
+.bugForm select:focus,
+.bug-form select:focus {
+  border-color: #7c83fd;
+
+  box-shadow:
+    0 0 0 3px rgba(124, 131, 253, .12);
+
+  outline: none;
+}
+
+
+/* =========================================================
+   GAME DROPDOWN - DISABLED
+========================================================= */
+
+#bugGame:disabled,
+#bugGameEdit:disabled,
+select[name="game"]:disabled,
+.bugForm select:disabled,
+.bug-form select:disabled {
+  background-color: #f3f4f6;
+
+  color: #9ca3af;
+
+  cursor: not-allowed;
+
+  opacity: .8;
+}
+
+
+/* =========================================================
+   GAME DROPDOWN OPTION
+========================================================= */
+
+#bugGame option,
+#bugGameEdit option,
+select[name="game"] option,
+.bugForm select option,
+.bug-form select option {
+  padding: 8px;
+
+  background: #fff;
+
+  color: #374151;
 }
