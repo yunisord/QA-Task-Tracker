@@ -1,0 +1,1049 @@
+import "dotenv/config";
+import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+
+const PORT =
+  Number(process.env.PORT || 3000);
+
+const GITLAB_BASE_URL =
+  String(
+    process.env.GITLAB_BASE_URL ||
+      "https://gitlab.ntt.lan"
+  ).replace(/\/+$/, "");
+
+const GITLAB_TOKEN =
+  String(
+    process.env.GITLAB_TOKEN || ""
+  ).trim();
+
+const GROUP_IDS =
+  String(
+    process.env.GITLAB_GROUP_IDS ||
+      "218,219"
+  )
+    .split(",")
+    .map(value => Number(value.trim()))
+    .filter(Number.isInteger);
+
+const POLL_INTERVAL_MS =
+  Math.max(
+    5000,
+    Number(
+      process.env.GITLAB_POLL_INTERVAL_MS ||
+        15000
+    )
+  );
+
+
+if (!GITLAB_TOKEN) {
+
+  console.error(
+    "ERROR: GITLAB_TOKEN is not configured."
+  );
+
+  process.exit(1);
+
+}
+
+
+/* =========================================================
+   GAME MAPPING
+========================================================= */
+
+const PROJECT_GAME_MAP = {
+
+  "game/bingo/bingo-base":
+    "Bingo Base",
+
+  "game/bingo/bingo-go":
+    "Bingo Go",
+
+  "game/bingo/bingo-pilipino":
+    "Bingo Pilipino",
+
+  "game/bingo/champion-ii":
+    "Champion II",
+
+  "game/bingo/multi-mega":
+    "Multi Mega",
+
+  "game/bingo/multi-plus":
+    "Multi Plus",
+
+  "game/bingo/plus-3":
+    "Plus 3",
+
+  "game/bingo/viva-mexico":
+    "Viva Mexico",
+
+
+  "game/slots/cafe-charm-fortune":
+    "Cafe Charm Fortune",
+
+  "game/slots/dragon-jewels":
+    "Dragon Jewels",
+
+  "game/slots/dragons-fortune":
+    "Dragons Fortune",
+
+  "game/slots/embracing-good-fortune":
+    "Embracing Good Fortune",
+
+  "game/slots/filipina-reels":
+    "Filipina Reels",
+
+  "game/slots/flow-of-fortune":
+    "Flow of Fortune",
+
+  "game/slots/fruitysplash":
+    "FruitySplash",
+
+  "game/slots/sally-cocos":
+    "Sally Cocos",
+
+  "game/slots/sallys-sari-store":
+    "Sallys Sari Store",
+
+  "game/slots/summer-charm-fortune":
+    "Summer Charm Fortune"
+
+};
+
+
+/* =========================================================
+   GITLAB STATE
+========================================================= */
+
+let gitlabBugs = [];
+
+let lastSyncAt = null;
+
+let lastSyncError = null;
+
+const clients = new Set();
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function normalize(value) {
+
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+}
+
+
+function normalizeKey(value) {
+
+  return normalize(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+}
+
+
+function projectToGame(project) {
+
+  const fullPath =
+    normalize(
+      project?.path_with_namespace
+    );
+
+  if (
+    PROJECT_GAME_MAP[
+      fullPath
+    ]
+  ) {
+
+    return PROJECT_GAME_MAP[
+      fullPath
+    ];
+
+  }
+
+
+  const path =
+    fullPath
+      .toLowerCase()
+      .replace(/^game\//, "");
+
+
+  const parts =
+    path.split("/");
+
+  const projectName =
+    parts.at(-1) || "";
+
+
+  return projectName
+    .split("-")
+    .map(
+      part =>
+        part
+          ? part[0].toUpperCase() +
+            part.slice(1)
+          : ""
+    )
+    .join(" ");
+
+}
+
+
+function getLabel(
+  labels,
+  prefix
+) {
+
+  if (!Array.isArray(labels)) {
+    return "";
+  }
+
+
+  const found =
+    labels.find(
+      label =>
+        normalize(label)
+          .toLowerCase()
+          .startsWith(
+            prefix.toLowerCase()
+          )
+    );
+
+
+  if (!found) {
+    return "";
+  }
+
+
+  return normalize(
+    found.slice(prefix.length)
+  );
+
+}
+
+
+function getPriority(labels) {
+
+  const priority =
+    getLabel(
+      labels,
+      "Priority:"
+    );
+
+  return priority;
+
+}
+
+
+function getProdState(labels) {
+
+  return getLabel(
+    labels,
+    "prod-state:"
+  );
+
+}
+
+
+function getCategory(
+  game
+) {
+
+  const bingoGames = new Set([
+
+    "Bingo Base",
+    "Bingo Go",
+    "Bingo Pilipino",
+    "Champion II",
+    "Multi Mega",
+    "Multi Plus",
+    "Plus 3",
+    "Viva Mexico"
+
+  ]);
+
+
+  if (
+    bingoGames.has(
+      game
+    )
+  ) {
+
+    return "Bingo Games";
+
+  }
+
+
+  return "Slot Games";
+
+}
+
+
+function extractBuild(
+  description
+) {
+
+  const text =
+    String(
+      description || ""
+    );
+
+
+  const match =
+    text.match(
+      /\*\*Build:\*\*\s*[\r\n]+([^\r\n]+)/i
+    );
+
+
+  return normalize(
+    match?.[1] || ""
+  );
+
+}
+
+
+function extractEnvironment(
+  description
+) {
+
+  const text =
+    String(
+      description || ""
+    );
+
+
+  const match =
+    text.match(
+      /\*\*Environment:\*\*\s*[\r\n]+([^\r\n]+)/i
+    );
+
+
+  return normalize(
+    match?.[1] || ""
+  );
+
+}
+
+
+function extractDevice(
+  description
+) {
+
+  const text =
+    String(
+      description || ""
+    );
+
+
+  const match =
+    text.match(
+      /\*\*Device:\*\*\s*[\r\n]+([^\r\n]+)/i
+    );
+
+
+  return normalize(
+    match?.[1] || ""
+  );
+
+}
+
+
+function buildRemarks(
+  issue
+) {
+
+  const environment =
+    extractEnvironment(
+      issue.description
+    );
+
+  const device =
+    extractDevice(
+      issue.description
+    );
+
+
+  const parts = [];
+
+
+  if (environment) {
+
+    parts.push(
+      `Environment: ${environment}`
+    );
+
+  }
+
+
+  if (device) {
+
+    parts.push(
+      `Device: ${device}`
+    );
+
+  }
+
+
+  return parts.join(" | ");
+
+}
+
+
+/* =========================================================
+   GITLAB FETCH
+========================================================= */
+
+async function gitlabRequest(
+  url
+) {
+
+  const response =
+    await fetch(
+      url,
+      {
+        headers: {
+          "PRIVATE-TOKEN":
+            GITLAB_TOKEN,
+
+          "Accept":
+            "application/json"
+        }
+      }
+    );
+
+
+  if (!response.ok) {
+
+    const body =
+      await response.text();
+
+
+    throw new Error(
+      `GitLab ${response.status}: ${body.slice(
+        0,
+        500
+      )}`
+    );
+
+  }
+
+
+  return response.json();
+
+}
+
+
+async function fetchGroupIssues(
+  groupId
+) {
+
+  const allIssues = [];
+
+  let page = 1;
+
+
+  while (true) {
+
+    const params =
+      new URLSearchParams({
+
+        scope:
+          "all",
+
+        state:
+          "all",
+
+        per_page:
+          "100",
+
+        page:
+          String(page)
+
+      });
+
+
+    const url =
+      `${GITLAB_BASE_URL}/api/v4/groups/${groupId}/issues?${params}`;
+
+
+    const issues =
+      await gitlabRequest(
+        url
+      );
+
+
+    if (
+      !Array.isArray(
+        issues
+      )
+    ) {
+
+      break;
+
+    }
+
+
+    allIssues.push(
+      ...issues
+    );
+
+
+    if (
+      issues.length < 100
+    ) {
+
+      break;
+
+    }
+
+
+    page++;
+
+  }
+
+
+  return allIssues;
+
+}
+
+
+/* =========================================================
+   NORMALIZE GITLAB ISSUE
+========================================================= */
+
+function normalizeGitLabIssue(
+  issue
+) {
+
+  const title =
+    normalize(
+      issue.title
+    );
+
+
+  if (
+    !title
+      .toUpperCase()
+      .startsWith("[BUG]")
+  ) {
+
+    return null;
+
+  }
+
+
+  const game =
+    projectToGame(
+      issue.references
+        ? {
+            path_with_namespace:
+              issue.references.full
+          }
+        : null
+    );
+
+
+  /*
+    GitLab group issue responses can contain
+    references but not always the complete
+    project path.
+
+    The project information is therefore
+    also resolved from issue.web_url.
+  */
+
+  const url =
+    normalize(
+      issue.web_url
+    );
+
+
+  const projectPath =
+    extractProjectPath(
+      url
+    );
+
+
+  const mappedGame =
+    PROJECT_GAME_MAP[
+      projectPath
+    ] ;
+if (!mappedGame){
+return null;
+}
+
+
+  const labels =
+    Array.isArray(
+      issue.labels
+    )
+      ? issue.labels
+      : [];
+
+
+  const prodState =
+    getProdState(
+      labels
+    );
+
+
+  const status =
+    prodState ||
+    (
+      normalize(
+        issue.state
+      )
+        .toLowerCase() ===
+      "closed"
+        ? "closed"
+        : "opened"
+    );
+
+
+  const author =
+    normalize(
+      issue.author?.name ||
+      issue.author?.username ||
+      ""
+    );
+
+
+  const priority =
+    getPriority(
+      labels
+    );
+
+
+  const build =
+    extractBuild(
+      issue.description
+    );
+
+
+  return {
+
+    build,
+
+    ticketUrl:
+      url,
+
+    game:
+      mappedGame,
+
+    category:
+      getCategory(
+        mappedGame
+      ),
+
+    bugTitle:
+      title,
+
+    priority,
+
+    dateCreated:
+      normalizeDate(
+        issue.created_at
+      ),
+
+    status,
+
+    createdBy:
+      author,
+
+    validatedBy:
+      "",
+
+    remarks:
+      buildRemarks(
+        issue
+      ),
+
+    ticketId:
+      String(
+        issue.iid
+      ),
+
+    source:
+      "gitlab",
+
+    gitlabIssueId:
+      issue.id,
+
+    gitlabProjectId:
+      issue.project_id,
+
+    gitlabProjectPath:
+      projectPath,
+
+    gitlabUpdatedAt:
+      issue.updated_at,
+
+    gitlabState:
+      issue.state
+
+  };
+
+}
+
+
+function extractProjectPath(
+  url
+) {
+
+  const marker =
+    "/-/issues/";
+
+
+  const index =
+    url.indexOf(
+      marker
+    );
+
+
+  if (
+    index === -1
+  ) {
+
+    return "";
+
+  }
+
+
+  return url
+    .slice(
+      0,
+      index
+    )
+    .replace(
+      /^https?:\/\/[^/]+\//,
+      ""
+    );
+
+}
+
+
+function normalizeDate(
+  value
+) {
+
+  const date =
+    new Date(
+      value
+    );
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+
+    return normalize(
+      value
+    );
+
+  }
+
+
+  return date
+    .toISOString()
+    .slice(
+      0,
+      10
+    );
+
+}
+
+
+/* =========================================================
+   SYNC
+========================================================= */
+
+async function syncGitLab() {
+
+  try {
+
+    const collected = [];
+
+
+    for (
+      const groupId
+      of GROUP_IDS
+    ) {
+
+      const issues =
+        await fetchGroupIssues(
+          groupId
+        );
+
+
+      for (
+        const issue
+        of issues
+      ) {
+
+        const bug =
+          normalizeGitLabIssue(
+            issue
+          );
+
+
+        if (bug) {
+
+          collected.push(
+            bug
+          );
+
+        }
+
+      }
+
+    }
+
+
+    const unique =
+      new Map();
+
+
+    for (
+      const bug
+      of collected
+    ) {
+
+      const key =
+        `${bug.gitlabProjectId}:${bug.ticketId}`;
+
+
+      unique.set(
+        key,
+        bug
+      );
+
+    }
+
+
+    gitlabBugs =
+      Array.from(
+        unique.values()
+      );
+
+
+    lastSyncAt =
+      new Date().toISOString();
+
+    lastSyncError =
+      null;
+
+
+    broadcast();
+
+
+    console.log(
+      `[GitLab] Synced ${gitlabBugs.length} [BUG] issues.`
+    );
+
+  } catch (error) {
+
+    lastSyncError =
+      error.message;
+
+    console.error(
+      "[GitLab] Sync failed:",
+      error.message
+    );
+
+
+    broadcast();
+
+  }
+
+}
+
+
+/* =========================================================
+   SSE
+========================================================= */
+
+function sendSSE(
+  response,
+  event,
+  data
+) {
+
+  response.write(
+    `event: ${event}\n`
+  );
+
+  response.write(
+    `data: ${JSON.stringify(data)}\n\n`
+  );
+
+}
+
+
+function broadcast() {
+
+  const payload = {
+
+    bugs:
+      gitlabBugs,
+
+    syncedAt:
+      lastSyncAt,
+
+    error:
+      lastSyncError
+
+  };
+
+
+  for (
+    const response
+    of clients
+  ) {
+
+    sendSSE(
+      response,
+      "bugs",
+      payload
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   API
+========================================================= */
+
+app.get(
+  "/api/bugs",
+  (req, res) => {
+
+    res.json({
+
+      bugs:
+        gitlabBugs,
+
+      syncedAt:
+        lastSyncAt,
+
+      error:
+        lastSyncError
+
+    });
+
+  }
+);
+
+
+app.get(
+  "/api/bugs/stream",
+  (req, res) => {
+
+    res.writeHead(
+      200,
+      {
+        "Content-Type":
+          "text/event-stream",
+
+        "Cache-Control":
+          "no-cache",
+
+        "Connection":
+          "keep-alive",
+
+        "X-Accel-Buffering":
+          "no"
+      }
+    );
+
+
+    clients.add(
+      res
+    );
+
+
+    sendSSE(
+      res,
+      "bugs",
+      {
+        bugs:
+          gitlabBugs,
+
+        syncedAt:
+          lastSyncAt,
+
+        error:
+          lastSyncError
+      }
+    );
+
+
+    req.on(
+      "close",
+      () => {
+
+        clients.delete(
+          res
+        );
+
+      }
+    );
+
+  }
+);
+
+
+/* =========================================================
+   STATIC FRONTEND
+========================================================= */
+
+app.use(
+  express.static(
+    __dirname
+  )
+);
+
+
+/* =========================================================
+   START
+========================================================= */
+
+app.listen(
+  PORT,
+  () => {
+
+    console.log(
+      `QA Task Tracker running at http://localhost:${PORT}`
+    );
+
+    console.log(
+      `GitLab groups: ${GROUP_IDS.join(", ")}`
+    );
+
+    console.log(
+      `GitLab polling interval: ${POLL_INTERVAL_MS} ms`
+    );
+
+    syncGitLab();
+
+    setInterval(
+      syncGitLab,
+      POLL_INTERVAL_MS
+    );
+
+  }
+);

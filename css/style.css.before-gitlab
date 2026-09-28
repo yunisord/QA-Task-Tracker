@@ -1205,190 +1205,48 @@ button {
 .gamePicker {
   position: relative;
 
-  width: 100%;
-  max-width: 100%;
   min-width: 0;
-
-  box-sizing: border-box;
 }
 
-.gamePicker #gameField {
-  display: block;
-
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-
-  box-sizing: border-box;
-}
-
-
-/* =========================================================
-   GAME SUGGESTIONS
-========================================================= */
-
-.gamePicker .suggestions,
-#gameSuggestions {
+.gameSuggestions {
   position: absolute;
 
-  top: calc(100% + 6px);
   left: 0;
   right: 0;
 
-  width: 100%;
-  max-width: 100%;
-
-  box-sizing: border-box;
+  top: calc(100% + 4px);
 
   max-height: 220px;
 
-  overflow-x: hidden;
   overflow-y: auto;
-
-  margin: 0;
-  padding: 4px 0;
 
   background: #fff;
 
   border: 1px solid var(--line);
+
   border-radius: 9px;
 
   box-shadow:
-    0 12px 30px rgba(17, 24, 39, 0.12);
+    0 12px 30px rgba(17, 24, 39, .12);
 
-  z-index: 1100;
+  z-index: 30;
 }
 
+.gameSuggestion {
+  padding: 9px 11px;
 
-/* =========================================================
-   GAME SUGGESTION ITEM
-========================================================= */
+  color: #475569;
 
-.gamePicker .suggestion {
-  display: flex;
-
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100%;
-  min-width: 0;
-
-  box-sizing: border-box;
-
-  gap: 10px;
-
-  padding: 10px 12px;
+  font-size: 11px;
 
   cursor: pointer;
 }
 
-.gamePicker .suggestion:hover {
-  background: #f5f7fa;
+.gameSuggestion:hover {
+  background: #f5f6ff;
+  color: var(--primary);
 }
 
-.gamePicker .suggestion > span:first-child {
-  flex: 1 1 auto;
-
-  min-width: 0;
-
-  overflow: hidden;
-
-  text-overflow: ellipsis;
-
-  white-space: nowrap;
-}
-
-.gamePicker .suggestion .pill {
-  flex: 0 0 auto;
-
-  max-width: 35%;
-
-  overflow: hidden;
-
-  text-overflow: ellipsis;
-
-  white-space: nowrap;
-}
-
-
-/* =========================================================
-   GAME PICKER — SMALL SCREENS
-========================================================= */
-
-@media (max-width: 600px) {
-
-  .gamePicker {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .gamePicker #gameField {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .gamePicker .suggestions,
-  #gameSuggestions {
-    top: calc(100% + 5px);
-
-    left: 0;
-    right: 0;
-
-    width: 100%;
-    max-width: 100%;
-
-    max-height: 180px;
-
-    border-radius: 8px;
-  }
-
-  .gamePicker .suggestion {
-    gap: 8px;
-
-    padding: 10px;
-
-    font-size: 12px;
-
-    line-height: 1.4;
-  }
-
-  .gamePicker .suggestion > span:first-child {
-    min-width: 0;
-  }
-
-  .gamePicker .suggestion .pill {
-    max-width: 30%;
-
-    font-size: 10px;
-  }
-}
-
-
-/* =========================================================
-   GAME PICKER — EXTRA SMALL SCREENS
-========================================================= */
-
-@media (max-width: 360px) {
-
-  .gamePicker .suggestions,
-  #gameSuggestions {
-    max-height: 160px;
-  }
-
-  .gamePicker .suggestion {
-    gap: 6px;
-
-    padding: 9px;
-
-    font-size: 11px;
-  }
-
-  .gamePicker .suggestion .pill {
-    max-width: 28%;
-
-    font-size: 9px;
-  }
-}
 
 /* =========================================================
    MODALS
@@ -1396,6 +1254,7 @@ button {
 
 .modal {
   position: fixed;
+
   inset: 0;
 
   display: none;
@@ -1417,17 +1276,12 @@ button {
 }
 
 .dialog {
-  position: relative;
-
   width: min(650px, 100%);
-  max-width: 100%;
 
   max-height: 92vh;
 
   overflow-y: auto;
   overflow-x: hidden;
-
-  box-sizing: border-box;
 
   background: #fff;
 
@@ -1436,10 +1290,11 @@ button {
   padding: 22px;
 
   box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.2);
+    0 30px 80px #0003;
 
   min-width: 0;
 }
+
 
 /* =========================================================
    BUG TRACKER
@@ -2171,7 +2026,7 @@ button {
 .bugTable td.actionsColumn,
 .bug-table th.actionsColumn,
 .bug-table td.actionsColumn {
-  position: static;
+  position: sticky;
 
   right: 0;
 
@@ -5183,7 +5038,6 @@ button {
     min-width: 105px;
 
     max-width: 105px;
-    text-align: center;
   }
 
   .bugAction {

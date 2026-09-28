@@ -33,10 +33,6 @@ let pageSize = 10;
 
 const STORAGE_KEY = "qa_bug_tracker";
 
-let gitlabBugs = [];
-let gitlabEventSource = null;
-let gitlabSyncInitialized = false;
-
 
 /* =========================================================
    HELPERS
@@ -950,38 +946,7 @@ function normalizeBug(row) {
       Internal only.
       Not displayed as a separate column.
     */
-    ticketId,
-
-    /*
-      GitLab metadata.
-      These fields are internal and are not displayed
-      as additional Bug Tracker columns.
-    */
-    source:
-      normalize(
-        row?.source
-      ),
-
-    gitlabIssueId:
-      row?.gitlabIssueId ?? "",
-
-    gitlabProjectId:
-      row?.gitlabProjectId ?? "",
-
-    gitlabProjectPath:
-      normalize(
-        row?.gitlabProjectPath
-      ),
-
-    gitlabUpdatedAt:
-      normalize(
-        row?.gitlabUpdatedAt
-      ),
-
-    gitlabState:
-      normalize(
-        row?.gitlabState
-      )
+    ticketId
 
   };
 
@@ -1023,22 +988,9 @@ function loadBugs() {
       )
     ) {
 
-      /*
-        GitLab tickets are live backend data.
-        Never restore them from localStorage.
-      */
-      const localBugs =
-        parsed.filter(
-          bug =>
-            normalizeKey(
-              bug?.source
-            ) !== "gitlab"
-        );
-
-
       bugs =
         deduplicateBugs(
-          localBugs
+          parsed
         );
 
       saveBugs();
@@ -1065,326 +1017,12 @@ function loadBugs() {
 
 function saveBugs() {
 
-  /*
-    Only local/imported bugs are persisted.
-    GitLab bugs remain live in memory.
-  */
-  const localBugs =
-    bugs.filter(
-      bug =>
-        normalizeKey(
-          bug?.source
-        ) !== "gitlab"
-    );
-
-
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify(
-      localBugs
+      bugs
     )
   );
-
-}
-
-
-/* =========================================================
-   GITLAB LIVE SYNC
-========================================================= */
-
-function isGitLabBug(
-  bug
-) {
-
-  return (
-    normalizeKey(
-      bug?.source
-    ) === "gitlab"
-  );
-
-}
-
-
-function getBugIdentity(
-  bug
-) {
-
-  const ticketId =
-    getTicketId(
-      bug
-    );
-
-
-  if (!ticketId) {
-
-    return "";
-
-  }
-
-
-  /*
-    GitLab issue IID values are only unique inside
-    their project. Use project ID + IID.
-  */
-  if (
-    isGitLabBug(
-      bug
-    )
-  ) {
-
-    const projectId =
-      bug?.gitlabProjectId ??
-      bug?.gitlabProjectPath ??
-      "";
-
-
-    return (
-      "gitlab:" +
-      normalizeKey(
-        projectId
-      ) +
-      ":" +
-      normalizeKey(
-        ticketId
-      )
-    );
-
-  }
-
-
-  return (
-    "local:" +
-    normalizeKey(
-      ticketId
-    )
-  );
-
-}
-
-
-function mergeGitLabBugs(
-  nextBugs
-) {
-
-  if (
-    !Array.isArray(
-      nextBugs
-    )
-  ) {
-
-    return;
-
-  }
-
-
-  const normalizedGitLab =
-    nextBugs
-      .map(
-        bug =>
-          normalizeBug(
-            bug
-          )
-      )
-      .filter(
-        bug =>
-          isGitLabBug(
-            bug
-          )
-      );
-
-
-  gitlabBugs =
-    deduplicateBugs(
-      normalizedGitLab
-    );
-
-
-  /*
-    Replace the previous GitLab snapshot while
-    preserving all local/imported bugs.
-  */
-  const localBugs =
-    bugs.filter(
-      bug =>
-        !isGitLabBug(
-          bug
-        )
-    );
-
-
-  bugs =
-    deduplicateBugs(
-      [
-        ...localBugs,
-        ...gitlabBugs
-      ]
-    );
-
-
-  const totalPages =
-    Math.max(
-      1,
-      Math.ceil(
-        filteredBugs.length /
-        pageSize
-      )
-    );
-
-
-  if (
-    currentPage >
-    totalPages
-  ) {
-
-    currentPage =
-      totalPages;
-
-  }
-
-
-  refreshAllViews();
-
-}
-
-
-async function loadGitLabBugs() {
-
-  try {
-
-    const response =
-      await fetch(
-        "/api/bugs",
-        {
-          cache: "no-store"
-        }
-      );
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        `GitLab API returned HTTP ${response.status}`
-      );
-
-    }
-
-
-    const data =
-      await response.json();
-
-
-    mergeGitLabBugs(
-      Array.isArray(
-        data?.bugs
-      )
-        ? data.bugs
-        : []
-    );
-
-
-    console.log(
-      `[GitLab] Loaded ${
-        Array.isArray(data?.bugs)
-          ? data.bugs.length
-          : 0
-      } live bug tickets.`
-    );
-
-  } catch (error) {
-
-    console.error(
-      "[GitLab] Failed to load bugs:",
-      error
-    );
-
-  }
-
-}
-
-
-function initGitLabSync() {
-
-  if (
-    gitlabSyncInitialized
-  ) {
-
-    return;
-
-  }
-
-
-  gitlabSyncInitialized =
-    true;
-
-
-  loadGitLabBugs();
-
-
-  if (
-    !window.EventSource
-  ) {
-
-    console.warn(
-      "[GitLab] EventSource is not supported. Initial sync only."
-    );
-
-    return;
-
-  }
-
-
-  gitlabEventSource =
-    new EventSource(
-      "/api/bugs/stream"
-    );
-
-
-  gitlabEventSource.onmessage =
-    event => {
-
-      try {
-
-        const data =
-          JSON.parse(
-            event.data
-          );
-
-
-        if (
-          Array.isArray(
-            data?.bugs
-          )
-        ) {
-
-          mergeGitLabBugs(
-            data.bugs
-          );
-
-        }
-
-      } catch (error) {
-
-        console.error(
-          "[GitLab] Failed to process live update:",
-          error
-        );
-
-      }
-
-    };
-
-
-  gitlabEventSource.onerror =
-    () => {
-
-      /*
-        EventSource automatically reconnects.
-      */
-      console.warn(
-        "[GitLab] Live connection interrupted. Waiting for reconnect."
-      );
-
-    };
 
 }
 
@@ -1392,8 +1030,6 @@ function initGitLabSync() {
 /* =========================================================
    DUPLICATE CONTROL
 ========================================================= */
-
-
 
 function deduplicateBugs(
   list
@@ -1437,9 +1073,6 @@ function deduplicateBugs(
 
 
       const key =
-        getBugIdentity(
-          bug
-        ) ||
         normalizeKey(
           ticketId
         );
@@ -3571,7 +3204,7 @@ function createBugRow(
       </td>
 
 
-            <!-- 12. ACTIONS -->
+      <!-- 12. ACTIONS -->
 
       <td>
 
@@ -3591,6 +3224,40 @@ function createBugRow(
 
             <i
               class="fa-solid fa-eye"
+            ></i>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="bugAction edit"
+            data-ticket="${escapeHTML(
+              ticketId
+            )}"
+            title="Edit Bug"
+            aria-label="Edit Bug"
+          >
+
+            <i
+              class="fa-solid fa-pen"
+            ></i>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="bugAction delete"
+            data-ticket="${escapeHTML(
+              ticketId
+            )}"
+            title="Delete Bug"
+            aria-label="Delete Bug"
+          >
+
+            <i
+              class="fa-solid fa-trash"
             ></i>
 
           </button>
@@ -4251,8 +3918,6 @@ function getFormValue(
 export function initBugTracker() {
 
   loadBugs();
-
-  initGitLabSync();
 
 
   const importButton =
@@ -4931,29 +4596,6 @@ function openEditBugModal(
 
       type:
         "error",
-
-      cancelText:
-        "Close"
-
-    });
-
-    return;
-
-  }
-
-
-  if (isGitLabBug(bug)) {
-
-    showCenterModal({
-
-      title:
-        "GitLab Bug - Read Only",
-
-      message:
-        "GitLab bug tickets cannot be edited from the QA Task Tracker. Please make changes directly in GitLab.",
-
-      type:
-        "warning",
 
       cancelText:
         "Close"
@@ -5909,29 +5551,6 @@ function confirmDeleteBug(
   }
 
 
-  if (isGitLabBug(bug)) {
-
-    showCenterModal({
-
-      title:
-        "GitLab Bug - Read Only",
-
-      message:
-        "GitLab bug tickets cannot be deleted from the QA Task Tracker. Please manage the ticket directly in GitLab.",
-
-      type:
-        "warning",
-
-      cancelText:
-        "Close"
-
-    });
-
-    return;
-
-  }
-
-
   showCenterModal({
 
     title:
@@ -5987,29 +5606,6 @@ function deleteBug(
   }
 
 
-  if (isGitLabBug(bugs[index])) {
-
-    showCenterModal({
-
-      title:
-        "GitLab Bug - Read Only",
-
-      message:
-        "GitLab bug tickets cannot be deleted from the QA Task Tracker. Please manage the ticket directly in GitLab.",
-
-      type:
-        "warning",
-
-      cancelText:
-        "Close"
-
-    });
-
-    return;
-
-  }
-
-
   bugs.splice(
     index,
     1
@@ -6058,17 +5654,7 @@ function deleteBug(
 
 function clearAllBugs() {
 
-  /*
-    Only remove local/imported bugs.
-    GitLab bugs are live read-only data and must remain.
-  */
-  bugs =
-    bugs.filter(
-      bug =>
-        isGitLabBug(
-          bug
-        )
-    );
+  bugs = [];
 
 
   saveBugs();
@@ -6082,7 +5668,7 @@ function clearAllBugs() {
 
 
   showNotification(
-    "All local/imported bug tickets have been removed. GitLab tickets remain.",
+    "All bug tickets have been removed.",
     "success",
     "Bug tracker cleared"
   );

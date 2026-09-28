@@ -34,6 +34,7 @@ content="width=device-width, initial-scale=1"
 
   <div class="app">
 
+```
 <!-- =====================================================
      SIDEBAR
 ====================================================== -->
@@ -1215,6 +1216,7 @@ content="width=device-width, initial-scale=1"
 
 
 </main>
+```
 
   </div>
 
@@ -1227,7 +1229,7 @@ content="width=device-width, initial-scale=1"
     id="taskModal"
   >
 
-
+```
 <div class="dialog">
 
 
@@ -1447,6 +1449,7 @@ content="width=device-width, initial-scale=1"
 
 
 </div>
+```
 
   </div>
 
@@ -1459,6 +1462,7 @@ content="width=device-width, initial-scale=1"
     id="memberModal"
   >
 
+```
 <div class="dialog">
 
 
@@ -1523,6 +1527,7 @@ content="width=device-width, initial-scale=1"
 
 
 </div>
+```
 
   </div>
 
@@ -1535,6 +1540,7 @@ content="width=device-width, initial-scale=1"
     id="gameModal"
   >
 
+```
 <div class="dialog">
 
 
@@ -1621,7 +1627,7 @@ content="width=device-width, initial-scale=1"
 
 
 </div>
-
+```
 
   </div>
 
@@ -1634,6 +1640,7 @@ content="width=device-width, initial-scale=1"
     id="bugModal"
   >
 
+```
 <div class="dialog bugFormDialog">
 
 
@@ -2220,6 +2227,7 @@ content="width=device-width, initial-scale=1"
 
 
 </div>
+```
 
   </div>
 
