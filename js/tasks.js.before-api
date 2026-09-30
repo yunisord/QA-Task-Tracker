@@ -1,7 +1,8 @@
 import {
   members,
   games,
-  tasks
+  tasks,
+  saveData
 } from "./storage.js";
 
 import {
@@ -365,70 +366,36 @@ export async function deleteTask(id) {
   }
 
 
-  try {
-
-    const response =
-      await fetch(
-        `/api/tasks/${encodeURIComponent(id)}`,
-        {
-          method: "DELETE"
-        }
-      );
-
-    const data =
-      await response
-        .json()
-        .catch(() => ({}));
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Failed to delete task."
-      );
-
-    }
-
-
-    const index =
-      tasks.findIndex(
-        item => item.id === id
-      );
-
-
-    if (index !== -1) {
-      tasks.splice(index, 1);
-    }
-
-
-    notifyDataChanged();
-
-
-    renderTasks();
-
-
-    showNotification(
-      `"${task.task}" has been deleted.`,
-      "success",
-      "Task deleted"
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Delete task failed:",
-      error
+  const index =
+    tasks.findIndex(
+      item => item.id === id
     );
 
 
-    await showCenterAlert(
-      error.message ||
-      "Failed to delete task.",
-      "Delete Failed"
-    );
-
+  if (index !== -1) {
+    tasks.splice(index, 1);
   }
+
+
+  saveData();
+
+
+  /*
+   * Refresh all dependent views
+   * immediately.
+   */
+
+  notifyDataChanged();
+
+
+  renderTasks();
+
+
+  showNotification(
+    `"${task.task}" has been deleted.`,
+    "success",
+    "Task deleted"
+  );
 
 }
 
@@ -555,130 +522,50 @@ export function setupTaskForm() {
         }
 
 
-        try {
-
-          const response =
-            await fetch(
-              isEditing
-                ? `/api/tasks/${encodeURIComponent(existingId)}`
-                : "/api/tasks",
-              {
-                method:
-                  isEditing
-                    ? "PUT"
-                    : "POST",
-
-                headers: {
-                  "Content-Type":
-                    "application/json"
-                },
-
-                body:
-                  JSON.stringify({
-                    task: task.task,
-                    member: task.member,
-                    game: task.game,
-                    start: task.start,
-                    due: task.due,
-                    ticket: task.ticket,
-                    status: task.status,
-                    remarks: task.remarks
-                  })
-              }
-            );
-
-
-          const data =
-            await response
-              .json()
-              .catch(() => ({}));
-
-
-          if (!response.ok) {
-
-            throw new Error(
-              data.error ||
-              "Failed to save task."
-            );
-
-          }
-
-
-          const savedTask =
-            data.task;
-
-
-          if (!savedTask) {
-
-            throw new Error(
-              "The server did not return the saved task."
-            );
-
-          }
-
-
-          const index =
-            tasks.findIndex(
-              item =>
-                item.id ===
-                savedTask.id
-            );
-
-
-          if (index === -1) {
-
-            tasks.push(
-              savedTask
-            );
-
-          } else {
-
-            tasks[index] =
-              savedTask;
-
-          }
-
-
-          closeModal("taskModal");
-
-
-          /*
-           * Refresh Dashboard,
-           * Tasks, Members and Games
-           * immediately.
-           */
-
-          notifyDataChanged();
-
-
-          renderTasks();
-
-
-          showNotification(
-            isEditing
-              ? "Task changes have been saved."
-              : "New task has been added.",
-            "success",
-            isEditing
-              ? "Task updated"
-              : "Task added"
-          );
-
-        } catch (error) {
-
-          console.error(
-            "Save task failed:",
-            error
+        const index =
+          tasks.findIndex(
+            item => item.id === id
           );
 
 
-          await showCenterAlert(
-            error.message ||
-            "Failed to save task.",
-            "Save Failed"
-          );
+        if (index === -1) {
+
+          tasks.push(task);
+
+        } else {
+
+          tasks[index] = task;
 
         }
+
+
+        saveData();
+
+
+        closeModal("taskModal");
+
+
+        /*
+         * Refresh Dashboard,
+         * Tasks, Members and Games
+         * immediately.
+         */
+
+        notifyDataChanged();
+
+
+        renderTasks();
+
+
+        showNotification(
+          isEditing
+            ? "Task changes have been saved."
+            : "New task has been added.",
+          "success",
+          isEditing
+            ? "Task updated"
+            : "Task added"
+        );
 
       }
     );

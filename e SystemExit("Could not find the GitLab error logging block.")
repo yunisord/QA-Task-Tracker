@@ -1,0 +1,28 @@
+[1mdiff --git a/server.js b/server.js[m
+[1mindex 530b732..55f0b1e 100644[m
+[1m--- a/server.js[m
+[1m+++ b/server.js[m
+[36m@@ -619,6 +619,14 @@[m [mreturn null;[m
+     );[m
+ [m
+ [m
+[32m+[m[32m  const closedBy =[m
+[32m+[m[32m    normalize([m
+[32m+[m[32m      issue.closed_by?.name ||[m
+[32m+[m[32m      issue.closed_by?.username ||[m
+[32m+[m[32m      ""[m
+[32m+[m[32m    );[m
+[32m+[m
+[32m+[m
+   const priority =[m
+     getPriority([m
+       labels[m
+[36m@@ -662,7 +670,7 @@[m [mreturn null;[m
+       author,[m
+ [m
+     validatedBy:[m
+[31m-      "",[m
+[32m+[m[32m      closedBy,[m
+ [m
+     remarks:[m
+       buildRemarks([m

@@ -1,5 +1,4 @@
 import { $ } from "./utils.js";
-import { initStorage } from "./storage.js";
 
 
 import {
@@ -217,10 +216,7 @@ function setupEvents() {
    INITIALIZE APPLICATION
 ========================= */
 
-async function initialize() {
-
-
-  await initStorage();
+function initialize() {
 
 
   setupEvents();

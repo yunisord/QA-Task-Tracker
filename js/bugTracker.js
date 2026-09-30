@@ -1,5 +1,8 @@
 import {
-  games
+  games,
+  refreshMembers,
+  refreshGames,
+  refreshTasks
 } from "./storage.js";
 
 import {
@@ -1006,6 +1009,10 @@ function loadBugs() {
 
       bugs = [];
 
+      gitlabBugs = [];
+
+      refreshAllViews();
+
       return;
 
     }
@@ -1023,31 +1030,39 @@ function loadBugs() {
       )
     ) {
 
-      /*
-        GitLab tickets are live backend data.
-        Never restore them from localStorage.
-      */
-      const localBugs =
-        parsed.filter(
-          bug =>
-            normalizeKey(
-              bug?.source
-            ) !== "gitlab"
-        );
-
-
       bugs =
         deduplicateBugs(
-          localBugs
+          parsed
         );
 
-      saveBugs();
+      /*
+        Restore the GitLab cache separately as well.
+
+        GitLab tickets are persisted in localStorage so
+        the Bug Tracker and statistics remain available
+        immediately after a browser refresh.
+      */
+      gitlabBugs =
+        bugs.filter(
+          bug =>
+            isGitLabBug(
+              bug
+            )
+        );
 
     } else {
 
       bugs = [];
 
+      gitlabBugs = [];
+
     }
+
+    /*
+      Render the cached data immediately.
+      GitLab synchronization happens afterward.
+    */
+    refreshAllViews();
 
   } catch (error) {
 
@@ -1058,30 +1073,20 @@ function loadBugs() {
 
     bugs = [];
 
+    gitlabBugs = [];
+
+    refreshAllViews();
+
   }
 
 }
 
-
 function saveBugs() {
-
-  /*
-    Only local/imported bugs are persisted.
-    GitLab bugs remain live in memory.
-  */
-  const localBugs =
-    bugs.filter(
-      bug =>
-        normalizeKey(
-          bug?.source
-        ) !== "gitlab"
-    );
-
 
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify(
-      localBugs
+      bugs
     )
   );
 
@@ -1193,16 +1198,91 @@ function mergeGitLabBugs(
       );
 
 
-  gitlabBugs =
-    deduplicateBugs(
-      normalizedGitLab
-    );
+  const existingGitLab =
+    new Map();
 
 
   /*
-    Replace the previous GitLab snapshot while
-    preserving all local/imported bugs.
+    Preserve GitLab tickets restored from localStorage
+    as well as the current in-memory GitLab cache.
   */
+  const cachedGitLabBugs =
+    bugs.filter(
+      bug =>
+        isGitLabBug(
+          bug
+        )
+    );
+
+
+  for (
+    const bug
+    of [
+      ...cachedGitLabBugs,
+      ...gitlabBugs
+    ]
+  ) {
+
+    const key =
+      getBugIdentity(
+        bug
+      );
+
+
+    if (!key) {
+
+      continue;
+
+    }
+
+
+    existingGitLab.set(
+      key,
+      bug
+    );
+
+  }
+
+
+  for (
+    const bug
+    of normalizedGitLab
+  ) {
+
+    const key =
+      getBugIdentity(
+        bug
+      );
+
+
+    const existing =
+      existingGitLab.get(
+        key
+      );
+
+
+    if (
+      !existing ||
+      existing.gitlabUpdatedAt !==
+        bug.gitlabUpdatedAt
+    ) {
+
+      existingGitLab.set(
+        key,
+        bug
+      );
+
+    }
+
+  }
+
+
+  gitlabBugs =
+    Array.from(
+      existingGitLab.values()
+    );
+
+
   const localBugs =
     bugs.filter(
       bug =>
@@ -1219,6 +1299,9 @@ function mergeGitLabBugs(
         ...gitlabBugs
       ]
     );
+
+
+  saveBugs();
 
 
   const totalPages =
@@ -1372,6 +1455,63 @@ function initGitLabSync() {
       }
 
     };
+
+
+  gitlabEventSource.addEventListener(
+    "data",
+    async event => {
+
+      try {
+
+        const data =
+          JSON.parse(
+            event.data
+          );
+
+        const resource =
+          data?.resource;
+
+        if (
+          ![
+            "members",
+            "games",
+            "tasks"
+          ].includes(resource)
+        ) {
+          return;
+        }
+
+        console.log(
+          `[Realtime] ${resource} changed. Refreshing shared data...`
+        );
+
+        /*
+         * Member and game changes can also
+         * modify/delete related tasks, so
+         * refresh all shared data together.
+         */
+        await Promise.all([
+          refreshMembers(),
+          refreshGames(),
+          refreshTasks()
+        ]);
+
+        renderDashboard();
+        renderTasks();
+        renderMembers();
+        renderGames();
+
+      } catch (error) {
+
+        console.error(
+          "[Realtime] Failed to process shared data update:",
+          error
+        );
+
+      }
+
+    }
+  );
 
 
   gitlabEventSource.onerror =
@@ -3139,57 +3279,149 @@ function renderBugTracker() {
 
 
 /* =========================================================
+   STATUS LABEL
+========================================================= */
+
+function formatStatusLabel(
+  status
+) {
+
+  if (!status) {
+    return "No Status";
+  }
+
+  return status
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, char => char.toUpperCase());
+
+}
+
+
+/* =========================================================
    STATS
 ========================================================= */
 
 function renderStats() {
 
+  const statsContainer =
+    $("bugStats");
+
+
+  if (!statsContainer) {
+    return;
+  }
+
+
+  /*
+    Statistics are always based on ALL bug records.
+
+    They are NOT affected by:
+    - Search
+    - Game filter
+    - Status filter
+    - Pagination
+  */
+  const allBugs =
+    Array.isArray(bugs)
+      ? bugs
+      : [];
+
+  const formatStatusLabel = status => {
+
+    if (!status) {
+      return "No Status";
+    }
+
+    return status
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, char => char.toUpperCase());
+
+  };
+
+
+  /* =======================================================
+     TOTAL BUGS
+  ======================================================= */
+
   const total =
-    bugs.length;
+    allBugs.length;
 
 
-  const open =
-    bugs.filter(
-      bug =>
-        normalizeKey(
+  /* =======================================================
+     STATUS COUNTS
+  ======================================================= */
+
+  const statusMap =
+    new Map();
+
+
+  allBugs.forEach(
+    bug => {
+
+      const rawStatus =
+        normalize(
           bug.status
-        ) === "open"
-    ).length;
+        );
 
 
-  const progress =
-    bugs.filter(
-      bug =>
-        [
-          "in progress",
-          "ongoing"
-        ].includes(
-          normalizeKey(
-            bug.status
-          )
+      /*
+        Bugs without a status are grouped
+        under "No Status" instead of being
+        silently excluded.
+      */
+
+      const status =
+        rawStatus ||
+        "No Status";
+
+
+      const key =
+        normalizeKey(
+          status
+        );
+
+
+      if (
+        !statusMap.has(
+          key
         )
-    ).length;
+      ) {
+
+        statusMap.set(
+          key,
+          {
+            label:
+              formatStatusLabel(status),
+
+            count:
+              0
+
+          }
+        );
+
+      }
 
 
-  const closed =
-    bugs.filter(
-      bug =>
-        [
-          "closed",
-          "resolved",
-          "fixed",
-          "done"
-        ].includes(
-          normalizeKey(
-            bug.status
-          )
-        )
-    ).length;
+      statusMap.get(
+        key
+      ).count++;
 
+    }
+  );
+
+
+  /* =======================================================
+     GAMES
+  ======================================================= */
 
   const bugGames =
     new Set(
-      bugs
+
+      allBugs
         .map(
           bug =>
             normalizeKey(
@@ -3197,57 +3429,249 @@ function renderStats() {
             )
         )
         .filter(Boolean)
+
     );
 
+  /* =======================================================
+     STATUS ICON
+  ======================================================= */
 
-  if (
-    $("bugTotal")
+  function getStatusIcon(
+    status
   ) {
 
-    $("bugTotal").textContent =
-      total;
+    const key =
+      normalizeKey(
+        status
+      );
+
+
+    const iconMap = {
+
+      "open":
+        "fa-folder-open",
+
+      "in progress":
+        "fa-spinner",
+
+      "ongoing":
+        "fa-spinner",
+
+      "closed":
+        "fa-circle-check",
+
+      "resolved":
+        "fa-circle-check",
+
+      "fixed":
+        "fa-circle-check",
+
+      "done":
+        "fa-circle-check",
+
+      "blocked":
+        "fa-ban",
+
+      "for Review":
+        "fa-magnifying-glass",
+
+      "reopened":
+        "fa-rotate-right",
+
+      "pending":
+        "fa-clock",
+
+      "cancelled":
+        "fa-circle-xmark",
+
+      "canceled":
+        "fa-circle-xmark",
+
+      "duplicate":
+        "fa-copy",
+
+      "no status":
+        "fa-circle-question"
+
+    };
+
+
+    return (
+      iconMap[key] ||
+      "fa-circle-dot"
+    );
 
   }
 
 
-  if (
-    $("bugOpen")
-  ) {
+  /* =======================================================
+     STATUS CARDS
+  ======================================================= */
 
-    $("bugOpen").textContent =
-      open;
+  const statusCards =
+    Array.from(
+      statusMap.values()
+    )
+      .map(
+        status => `
 
-  }
+          <div
+            class="bugStat"
+            data-status="${escapeHTML(
+              status.label
+            )}"
+          >
+
+            <div
+              class="bugStatTop"
+            >
+
+              <div>
+
+                <div
+                  class="bugStatLabel"
+                >
+                  ${escapeHTML(
+                    status.label
+                  )}
+                </div>
+
+                <div
+                  class="bugStatValue"
+                >
+                  ${status.count}
+                </div>
+
+              </div>
 
 
-  if (
-    $("bugProgress")
-  ) {
+              <div
+                class="bugStatIcon"
+              >
 
-    $("bugProgress").textContent =
-      progress;
+                <i
+                  class="fa-solid ${getStatusIcon(
+                    status.label
+                  )}"
+                ></i>
 
-  }
+              </div>
+
+            </div>
+
+          </div>
+
+        `
+      )
+      .join("");
 
 
-  if (
-    $("bugClosed")
-  ) {
+  /* =======================================================
+     TOTAL CARD
+  ======================================================= */
 
-    $("bugClosed").textContent =
-      closed;
+  const totalCard = `
 
-  }
+    <div
+      class="bugStat"
+      data-stat="total"
+    >
+
+      <div
+        class="bugStatTop"
+      >
+
+        <div>
+
+          <div
+            class="bugStatLabel"
+          >
+            Total Bugs
+          </div>
+
+          <div
+            class="bugStatValue"
+          >
+            ${total}
+          </div>
+
+        </div>
 
 
-  if (
-    $("bugGameCount")
-  ) {
+        <div
+          class="bugStatIcon"
+        >
 
-    $("bugGameCount").textContent =
-      bugGames.size;
+          <i
+            class="fa-solid fa-bug"
+          ></i>
 
-  }
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  /* =======================================================
+     GAMES CARD
+  ======================================================= */
+
+  const gamesCard = `
+
+    <div
+      class="bugStat"
+      data-stat="games"
+    >
+
+      <div
+        class="bugStatTop"
+      >
+
+        <div>
+
+          <div
+            class="bugStatLabel"
+          >
+            Games
+          </div>
+
+          <div
+            class="bugStatValue"
+          >
+            ${bugGames.size}
+          </div>
+
+        </div>
+
+
+        <div
+          class="bugStatIcon"
+        >
+
+          <i
+            class="fa-solid fa-gamepad"
+          ></i>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
+  statsContainer.innerHTML =
+    totalCard +
+    statusCards +
+    gamesCard;
 
 }
 
@@ -3518,12 +3942,11 @@ function createBugRow(
 
       <td>
 
-        ${createStatusPill(
-          bug.status
-        )}
+  ${createStatusPill(
+    formatStatusLabel(bug.status)
+  )}
 
-      </td>
-
+</td>
 
       <!-- 9. CREATED BY -->
 

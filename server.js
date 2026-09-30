@@ -2,14 +2,49 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import pg from "pg";
+
+const { Pool } = pg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
+app.use(
+  express.json()
+);
+
+const db = new Pool({
+  host: process.env.PGHOST,
+  port: Number(process.env.PGPORT || 5432),
+  database: process.env.PGDATABASE,
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+});
+
 const PORT =
   Number(process.env.PORT || 3000);
+
+app.get("/api/health/db", async (req, res) => {
+  try {
+    const result = await db.query(
+      "SELECT current_user, current_database(), NOW() AS server_time"
+    );
+
+    res.json({
+      ok: true,
+      database: result.rows[0]
+    });
+  } catch (error) {
+    console.error("PostgreSQL health check failed:", error);
+
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
 
 const GITLAB_BASE_URL =
   String(
@@ -125,6 +160,13 @@ let gitlabBugs = [];
 let lastSyncAt = null;
 
 let lastSyncError = null;
+
+/*
+  Each GitLab group keeps its own polling checkpoint.
+  This allows incremental polling without mixing
+  update timestamps between groups.
+*/
+const groupSyncCheckpoints = new Map();
 
 const clients = new Set();
 
@@ -445,7 +487,8 @@ async function gitlabRequest(
 
 
 async function fetchGroupIssues(
-  groupId
+  groupId,
+  updatedAfter = null
 ) {
 
   const allIssues = [];
@@ -471,6 +514,18 @@ async function fetchGroupIssues(
           String(page)
 
       });
+
+
+    if (
+      updatedAfter
+    ) {
+
+      params.set(
+        "updated_after",
+        updatedAfter
+      );
+
+    }
 
 
     const url =
@@ -619,6 +674,14 @@ return null;
     );
 
 
+  const closedBy =
+    normalize(
+      issue.closed_by?.name ||
+      issue.closed_by?.username ||
+      ""
+    );
+
+
   const priority =
     getPriority(
       labels
@@ -662,7 +725,7 @@ return null;
       author,
 
     validatedBy:
-      "",
+      closedBy,
 
     remarks:
       buildRemarks(
@@ -774,7 +837,24 @@ async function syncGitLab() {
 
   try {
 
+    /*
+      First sync:
+      Fetch the complete GitLab issue set.
+
+      Later syncs:
+      Fetch only issues updated after the
+      previous successful checkpoint.
+    */
+
+    const isInitialSync =
+      gitlabBugs.length === 0;
+
+
     const collected = [];
+
+    let totalFetched = 0;
+
+    let changedCount = 0;
 
 
     for (
@@ -782,10 +862,31 @@ async function syncGitLab() {
       of GROUP_IDS
     ) {
 
+      const updatedAfter =
+        isInitialSync
+          ? null
+          : groupSyncCheckpoints.get(
+              groupId
+            ) || null;
+
+
       const issues =
         await fetchGroupIssues(
-          groupId
+          groupId,
+          updatedAfter
         );
+
+
+      totalFetched +=
+        issues.length;
+
+
+      /*
+        Advance the checkpoint only after
+        the GitLab request succeeded.
+      */
+      const syncCheckpoint =
+        new Date().toISOString();
 
 
       for (
@@ -809,34 +910,126 @@ async function syncGitLab() {
 
       }
 
+
+      groupSyncCheckpoints.set(
+        groupId,
+        syncCheckpoint
+      );
+
     }
 
 
-    const unique =
-      new Map();
-
-
-    for (
-      const bug
-      of collected
+    /*
+      Initial sync replaces the empty cache.
+    */
+    if (
+      isInitialSync
     ) {
 
-      const key =
-        `${bug.gitlabProjectId}:${bug.ticketId}`;
+      const unique =
+        new Map();
 
 
-      unique.set(
-        key,
-        bug
-      );
+      for (
+        const bug
+        of collected
+      ) {
+
+        const key =
+          `${bug.gitlabProjectId}:${bug.ticketId}`;
+
+
+        unique.set(
+          key,
+          bug
+        );
+
+      }
+
+
+      gitlabBugs =
+        Array.from(
+          unique.values()
+        );
+
+
+      changedCount =
+        gitlabBugs.length;
+
+    } else {
+
+      /*
+        Incremental sync:
+        Keep every existing ticket and replace
+        only tickets that are new or changed.
+      */
+
+      const existing =
+        new Map();
+
+
+      for (
+        const bug
+        of gitlabBugs
+      ) {
+
+        const key =
+          `${bug.gitlabProjectId}:${bug.ticketId}`;
+
+
+        existing.set(
+          key,
+          bug
+        );
+
+      }
+
+
+      for (
+        const bug
+        of collected
+      ) {
+
+        const key =
+          `${bug.gitlabProjectId}:${bug.ticketId}`;
+
+
+        const previous =
+          existing.get(
+            key
+          );
+
+
+        if (
+          !previous ||
+          previous.gitlabUpdatedAt !==
+            bug.gitlabUpdatedAt
+        ) {
+
+          existing.set(
+            key,
+            bug
+          );
+
+          changedCount++;
+
+        }
+
+      }
+
+
+      if (
+        changedCount > 0
+      ) {
+
+        gitlabBugs =
+          Array.from(
+            existing.values()
+          );
+
+      }
 
     }
-
-
-    gitlabBugs =
-      Array.from(
-        unique.values()
-      );
 
 
     lastSyncAt =
@@ -846,12 +1039,42 @@ async function syncGitLab() {
       null;
 
 
+    /*
+      Nothing changed:
+      Keep the existing cache and do not
+      send an unnecessary SSE update.
+    */
+    if (
+      changedCount === 0
+    ) {
+
+      console.log(
+        `[GitLab] No changes. Cached ${gitlabBugs.length} [BUG] issues.`
+      );
+
+      return;
+
+    }
+
+
     broadcast();
 
 
-    console.log(
-      `[GitLab] Synced ${gitlabBugs.length} [BUG] issues.`
-    );
+    if (
+      isInitialSync
+    ) {
+
+      console.log(
+        `[GitLab] Initial sync: cached ${gitlabBugs.length} [BUG] issues.`
+      );
+
+    } else {
+
+      console.log(
+        `[GitLab] Updated ${changedCount} [BUG] issues. Cache: ${gitlabBugs.length}.`
+      );
+
+    }
 
   } catch (error) {
 
@@ -860,7 +1083,22 @@ async function syncGitLab() {
 
     console.error(
       "[GitLab] Sync failed:",
-      error.message
+      error
+    );
+
+    console.error(
+      "[GitLab] Error message:",
+      error?.message
+    );
+
+    console.error(
+      "[GitLab] Error cause:",
+      error?.cause
+    );
+
+    console.error(
+      "[GitLab] Error stack:",
+      error?.stack
     );
 
 
@@ -922,6 +1160,1314 @@ function broadcast() {
   }
 
 }
+
+
+function broadcastDataChange(
+  resource
+) {
+
+  const payload = {
+
+    resource,
+    timestamp:
+      new Date().toISOString()
+
+  };
+
+
+  for (
+    const response
+    of clients
+  ) {
+
+    sendSSE(
+      response,
+      "data",
+      payload
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   POSTGRESQL CRUD API
+========================================================= */
+
+/*
+ * Convert a database task row into the
+ * frontend task object shape.
+ */
+function mapTask(row) {
+
+  return {
+    id:
+      String(row.id),
+
+    member:
+      row.assigned_to || "",
+
+    task:
+      row.title || "",
+
+    game:
+      row.game || "",
+
+    start:
+      row.start_date
+        ? String(row.start_date)
+        : "",
+
+    due:
+      row.due_date
+        ? String(row.due_date)
+        : "",
+
+    ticket:
+      row.ticket_url || "",
+
+    status:
+      row.status || "To Do",
+
+    remarks:
+      row.remarks || "",
+
+    updated:
+      row.updated_at
+        ? new Date(row.updated_at).toISOString()
+        : null
+
+  };
+
+}
+
+
+/* =========================================================
+   MEMBERS
+========================================================= */
+
+app.get(
+  "/api/members",
+  async (req, res) => {
+
+    try {
+
+      const result =
+        await db.query(`
+          SELECT
+            id,
+            name
+          FROM members
+          ORDER BY id
+        `);
+
+      res.json({
+        members:
+          result.rows.map(
+            row => row.name
+          )
+      });
+
+    } catch (error) {
+
+      console.error(
+        "GET /api/members failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    }
+
+  }
+);
+
+
+app.post(
+  "/api/members",
+  async (req, res) => {
+
+    const name =
+      String(
+        req.body?.name || ""
+      ).trim();
+
+    if (!name) {
+
+      return res.status(400).json({
+        error:
+          "Member name is required."
+      });
+
+    }
+
+    try {
+
+      const duplicate =
+        await db.query(
+          `
+            SELECT id
+            FROM members
+            WHERE LOWER(name) = LOWER($1)
+            LIMIT 1
+          `,
+          [name]
+        );
+
+      if (duplicate.rowCount > 0) {
+
+        return res.status(409).json({
+          error:
+            "That member already exists."
+        });
+
+      }
+
+      const result =
+        await db.query(
+          `
+            INSERT INTO members (
+              name,
+              updated_at
+            )
+            VALUES (
+              $1,
+              NOW()
+            )
+            RETURNING id, name
+          `,
+          [name]
+        );
+
+      broadcastDataChange("members");
+
+      res.status(201).json({
+        member:
+          result.rows[0].name
+      });
+
+    } catch (error) {
+
+      console.error(
+        "POST /api/members failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    }
+
+  }
+);
+
+
+app.put(
+  "/api/members/:id",
+  async (req, res) => {
+
+    const id =
+      Number(req.params.id);
+
+    const name =
+      String(
+        req.body?.name || ""
+      ).trim();
+
+    if (!Number.isInteger(id)) {
+
+      return res.status(400).json({
+        error:
+          "Invalid member ID."
+      });
+
+    }
+
+    if (!name) {
+
+      return res.status(400).json({
+        error:
+          "Member name is required."
+      });
+
+    }
+
+    const client =
+      await db.connect();
+
+    try {
+
+      await client.query(
+        "BEGIN"
+      );
+
+      const current =
+        await client.query(
+          `
+            SELECT name
+            FROM members
+            WHERE id = $1
+            FOR UPDATE
+          `,
+          [id]
+        );
+
+      if (
+        current.rowCount === 0
+      ) {
+
+        await client.query(
+          "ROLLBACK"
+        );
+
+        return res.status(404).json({
+          error:
+            "Member not found."
+        });
+
+      }
+
+      const oldName =
+        current.rows[0].name;
+
+      const duplicate =
+        await client.query(
+          `
+            SELECT id
+            FROM members
+            WHERE LOWER(name) = LOWER($1)
+              AND id <> $2
+            LIMIT 1
+          `,
+          [name, id]
+        );
+
+      if (duplicate.rowCount > 0) {
+
+        await client.query(
+          "ROLLBACK"
+        );
+
+        return res.status(409).json({
+          error:
+            "That member already exists."
+        });
+
+      }
+
+      await client.query(
+        `
+          UPDATE members
+          SET
+            name = $1,
+            updated_at = NOW()
+          WHERE id = $2
+        `,
+        [name, id]
+      );
+
+      /*
+       * Tasks store member names rather
+       * than member IDs, so keep them
+       * synchronized inside the same
+       * transaction.
+       */
+      await client.query(
+        `
+          UPDATE tasks
+          SET
+            assigned_to = $1,
+            updated_at = NOW()
+          WHERE assigned_to = $2
+        `,
+        [name, oldName]
+      );
+
+      await client.query(
+        "COMMIT"
+      );
+
+      broadcastDataChange("members");
+
+      res.json({
+        member:
+          name
+      });
+
+    } catch (error) {
+
+      await client.query(
+        "ROLLBACK"
+      );
+
+      console.error(
+        "PUT /api/members/:id failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    } finally {
+
+      client.release();
+
+    }
+
+  }
+);
+
+
+app.delete(
+  "/api/members/:id",
+  async (req, res) => {
+
+    const id =
+      Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+
+      return res.status(400).json({
+        error:
+          "Invalid member ID."
+      });
+
+    }
+
+    const client =
+      await db.connect();
+
+    try {
+
+      await client.query(
+        "BEGIN"
+      );
+
+      const current =
+        await client.query(
+          `
+            SELECT name
+            FROM members
+            WHERE id = $1
+            FOR UPDATE
+          `,
+          [id]
+        );
+
+      if (
+        current.rowCount === 0
+      ) {
+
+        await client.query(
+          "ROLLBACK"
+        );
+
+        return res.status(404).json({
+          error:
+            "Member not found."
+        });
+
+      }
+
+      const name =
+        current.rows[0].name;
+
+      await client.query(
+        `
+          DELETE FROM tasks
+          WHERE assigned_to = $1
+        `,
+        [name]
+      );
+
+      await client.query(
+        `
+          DELETE FROM members
+          WHERE id = $1
+        `,
+        [id]
+      );
+
+      await client.query(
+        "COMMIT"
+      );
+
+      broadcastDataChange("members");
+
+      res.json({
+        ok: true
+      });
+
+    } catch (error) {
+
+      await client.query(
+        "ROLLBACK"
+      );
+
+      console.error(
+        "DELETE /api/members/:id failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    } finally {
+
+      client.release();
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   GAMES
+========================================================= */
+
+app.get(
+  "/api/games",
+  async (req, res) => {
+
+    try {
+
+      const result =
+        await db.query(`
+          SELECT
+            id,
+            name,
+            category
+          FROM games
+          ORDER BY id
+        `);
+
+      const games = {
+        "Bingo Games": [],
+        "Slot Games": []
+      };
+
+      for (
+        const row of result.rows
+      ) {
+
+        if (
+          !games[row.category]
+        ) {
+          games[row.category] = [];
+        }
+
+        games[row.category].push(
+          row.name
+        );
+
+      }
+
+      res.json({
+        games
+      });
+
+    } catch (error) {
+
+      console.error(
+        "GET /api/games failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    }
+
+  }
+);
+
+
+app.post(
+  "/api/games",
+  async (req, res) => {
+
+    const name =
+      String(
+        req.body?.name || ""
+      ).trim();
+
+    const category =
+      String(
+        req.body?.category || ""
+      ).trim();
+
+    if (!name) {
+
+      return res.status(400).json({
+        error:
+          "Game name is required."
+      });
+
+    }
+
+    if (!category) {
+
+      return res.status(400).json({
+        error:
+          "Game category is required."
+      });
+
+    }
+
+    try {
+
+      const duplicate =
+        await db.query(
+          `
+            SELECT id
+            FROM games
+            WHERE LOWER(name) = LOWER($1)
+            LIMIT 1
+          `,
+          [name]
+        );
+
+      if (duplicate.rowCount > 0) {
+
+        return res.status(409).json({
+          error:
+            "That game already exists."
+        });
+
+      }
+
+      const result =
+        await db.query(
+          `
+            INSERT INTO games (
+              name,
+              category,
+              updated_at
+            )
+            VALUES (
+              $1,
+              $2,
+              NOW()
+            )
+            RETURNING id, name, category
+          `,
+          [name, category]
+        );
+
+      broadcastDataChange("games");
+
+      res.status(201).json({
+        game:
+          result.rows[0]
+      });
+
+    } catch (error) {
+
+      console.error(
+        "POST /api/games failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    }
+
+  }
+);
+
+
+app.put(
+  "/api/games/:id",
+  async (req, res) => {
+
+    const id =
+      Number(req.params.id);
+
+    const name =
+      String(
+        req.body?.name || ""
+      ).trim();
+
+    const category =
+      String(
+        req.body?.category || ""
+      ).trim();
+
+    if (!Number.isInteger(id)) {
+
+      return res.status(400).json({
+        error:
+          "Invalid game ID."
+      });
+
+    }
+
+    if (!name || !category) {
+
+      return res.status(400).json({
+        error:
+          "Game name and category are required."
+      });
+
+    }
+
+    const client =
+      await db.connect();
+
+    try {
+
+      await client.query(
+        "BEGIN"
+      );
+
+      const current =
+        await client.query(
+          `
+            SELECT name
+            FROM games
+            WHERE id = $1
+            FOR UPDATE
+          `,
+          [id]
+        );
+
+      if (
+        current.rowCount === 0
+      ) {
+
+        await client.query(
+          "ROLLBACK"
+        );
+
+        return res.status(404).json({
+          error:
+            "Game not found."
+        });
+
+      }
+
+      const oldName =
+        current.rows[0].name;
+
+      const duplicate =
+        await client.query(
+          `
+            SELECT id
+            FROM games
+            WHERE LOWER(name) = LOWER($1)
+              AND id <> $2
+            LIMIT 1
+          `,
+          [name, id]
+        );
+
+      if (duplicate.rowCount > 0) {
+
+        await client.query(
+          "ROLLBACK"
+        );
+
+        return res.status(409).json({
+          error:
+            "That game already exists."
+        });
+
+      }
+
+      await client.query(
+        `
+          UPDATE games
+          SET
+            name = $1,
+            category = $2,
+            updated_at = NOW()
+          WHERE id = $3
+        `,
+        [name, category, id]
+      );
+
+      /*
+       * Tasks store game names, so keep
+       * renamed games synchronized.
+       */
+      await client.query(
+        `
+          UPDATE tasks
+          SET
+            game = $1,
+            updated_at = NOW()
+          WHERE game = $2
+        `,
+        [name, oldName]
+      );
+
+      await client.query(
+        "COMMIT"
+      );
+
+      broadcastDataChange("games");
+
+      res.json({
+        game: {
+          id,
+          name,
+          category
+        }
+      });
+
+    } catch (error) {
+
+      await client.query(
+        "ROLLBACK"
+      );
+
+      console.error(
+        "PUT /api/games/:id failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    } finally {
+
+      client.release();
+
+    }
+
+  }
+);
+
+
+app.delete(
+  "/api/games/:id",
+  async (req, res) => {
+
+    const id =
+      Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+
+      return res.status(400).json({
+        error:
+          "Invalid game ID."
+      });
+
+    }
+
+    const client =
+      await db.connect();
+
+    try {
+
+      await client.query(
+        "BEGIN"
+      );
+
+      const current =
+        await client.query(
+          `
+            SELECT name
+            FROM games
+            WHERE id = $1
+            FOR UPDATE
+          `,
+          [id]
+        );
+
+      if (
+        current.rowCount === 0
+      ) {
+
+        await client.query(
+          "ROLLBACK"
+        );
+
+        return res.status(404).json({
+          error:
+            "Game not found."
+        });
+
+      }
+
+      const name =
+        current.rows[0].name;
+
+      await client.query(
+        `
+          DELETE FROM tasks
+          WHERE game = $1
+        `,
+        [name]
+      );
+
+      await client.query(
+        `
+          DELETE FROM games
+          WHERE id = $1
+        `,
+        [id]
+      );
+
+      await client.query(
+        "COMMIT"
+      );
+
+      broadcastDataChange("games");
+
+      res.json({
+        ok: true
+      });
+
+    } catch (error) {
+
+      await client.query(
+        "ROLLBACK"
+      );
+
+      console.error(
+        "DELETE /api/games/:id failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    } finally {
+
+      client.release();
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   TASKS
+========================================================= */
+
+app.get(
+  "/api/tasks",
+  async (req, res) => {
+
+    try {
+
+      const result =
+        await db.query(`
+          SELECT
+            id,
+            title,
+            game,
+            status,
+            assigned_to,
+            due_date,
+            ticket_url,
+            remarks,
+            start_date,
+            updated_at
+          FROM tasks
+          ORDER BY id
+        `);
+
+      res.json({
+        tasks:
+          result.rows.map(
+            mapTask
+          )
+      });
+
+    } catch (error) {
+
+      console.error(
+        "GET /api/tasks failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    }
+
+  }
+);
+
+
+app.post(
+  "/api/tasks",
+  async (req, res) => {
+
+    const body =
+      req.body || {};
+
+    const title =
+      String(
+        body.task || ""
+      ).trim();
+
+    const member =
+      String(
+        body.member || ""
+      ).trim();
+
+    const game =
+      String(
+        body.game || ""
+      ).trim();
+
+    const start =
+      body.start || null;
+
+    const due =
+      body.due || null;
+
+    const ticket =
+      String(
+        body.ticket || ""
+      ).trim();
+
+    const status =
+      String(
+        body.status || "To Do"
+      ).trim();
+
+    const remarks =
+      String(
+        body.remarks || ""
+      ).trim();
+
+    if (!title) {
+
+      return res.status(400).json({
+        error:
+          "Task name is required."
+      });
+
+    }
+
+    if (!member) {
+
+      return res.status(400).json({
+        error:
+          "Member is required."
+      });
+
+    }
+
+    if (!game) {
+
+      return res.status(400).json({
+        error:
+          "Game is required."
+      });
+
+    }
+
+    try {
+
+      const result =
+        await db.query(
+          `
+            INSERT INTO tasks (
+              title,
+              game,
+              status,
+              assigned_to,
+              due_date,
+              ticket_url,
+              remarks,
+              start_date,
+              updated_at
+            )
+            VALUES (
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6,
+              $7,
+              $8,
+              NOW()
+            )
+            RETURNING
+              id,
+              title,
+              game,
+              status,
+              assigned_to,
+              due_date,
+              ticket_url,
+              remarks,
+              start_date,
+              updated_at
+          `,
+          [
+            title,
+            game,
+            status,
+            member,
+            due,
+            ticket,
+            remarks,
+            start
+          ]
+        );
+
+      broadcastDataChange("tasks");
+
+      res.status(201).json({
+        task:
+          mapTask(
+            result.rows[0]
+          )
+      });
+
+    } catch (error) {
+
+      console.error(
+        "POST /api/tasks failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    }
+
+  }
+);
+
+
+app.put(
+  "/api/tasks/:id",
+  async (req, res) => {
+
+    const id =
+      Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+
+      return res.status(400).json({
+        error:
+          "Invalid task ID."
+      });
+
+    }
+
+    const body =
+      req.body || {};
+
+    const title =
+      String(
+        body.task || ""
+      ).trim();
+
+    const member =
+      String(
+        body.member || ""
+      ).trim();
+
+    const game =
+      String(
+        body.game || ""
+      ).trim();
+
+    const start =
+      body.start || null;
+
+    const due =
+      body.due || null;
+
+    const ticket =
+      String(
+        body.ticket || ""
+      ).trim();
+
+    const status =
+      String(
+        body.status || "To Do"
+      ).trim();
+
+    const remarks =
+      String(
+        body.remarks || ""
+      ).trim();
+
+    if (!title || !member || !game) {
+
+      return res.status(400).json({
+        error:
+          "Task, member, and game are required."
+      });
+
+    }
+
+    try {
+
+      const result =
+        await db.query(
+          `
+            UPDATE tasks
+            SET
+              title = $1,
+              game = $2,
+              status = $3,
+              assigned_to = $4,
+              due_date = $5,
+              ticket_url = $6,
+              remarks = $7,
+              start_date = $8,
+              updated_at = NOW()
+            WHERE id = $9
+            RETURNING
+              id,
+              title,
+              game,
+              status,
+              assigned_to,
+              due_date,
+              ticket_url,
+              remarks,
+              start_date,
+              updated_at
+          `,
+          [
+            title,
+            game,
+            status,
+            member,
+            due,
+            ticket,
+            remarks,
+            start,
+            id
+          ]
+        );
+
+      if (
+        result.rowCount === 0
+      ) {
+
+        return res.status(404).json({
+          error:
+            "Task not found."
+        });
+
+      }
+
+      broadcastDataChange("tasks");
+
+      res.json({
+        task:
+          mapTask(
+            result.rows[0]
+          )
+      });
+
+    } catch (error) {
+
+      console.error(
+        "PUT /api/tasks/:id failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    }
+
+  }
+);
+
+
+app.delete(
+  "/api/tasks/:id",
+  async (req, res) => {
+
+    const id =
+      Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+
+      return res.status(400).json({
+        error:
+          "Invalid task ID."
+      });
+
+    }
+
+    try {
+
+      const result =
+        await db.query(
+          `
+            DELETE FROM tasks
+            WHERE id = $1
+            RETURNING id
+          `,
+          [id]
+        );
+
+      if (
+        result.rowCount === 0
+      ) {
+
+        return res.status(404).json({
+          error:
+            "Task not found."
+        });
+
+      }
+
+      broadcastDataChange("tasks");
+
+      res.json({
+        ok: true
+      });
+
+    } catch (error) {
+
+      console.error(
+        "DELETE /api/tasks/:id failed:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message
+      });
+
+    }
+
+  }
+);
 
 
 /* =========================================================

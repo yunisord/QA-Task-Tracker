@@ -149,8 +149,42 @@ export function setView(view) {
 
 
   /* -------------------------
-     Update Page Title
+     Add Task Button
   ------------------------- */
+
+  const addTask =
+    $("addTask");
+
+  if (addTask) {
+
+    addTask.classList.toggle(
+      "hidden",
+      view !== "dashboard" &&
+      view !== "tasks"
+    );
+
+  }
+
+
+  /* -------------------------
+     Update Page Title / Subtitle
+  ------------------------- */
+
+  const titleContainer =
+    document.querySelector(".title");
+
+  const showPageHeader =
+    view === "dashboard" ||
+    view === "tasks";
+
+  if (titleContainer) {
+
+    titleContainer.classList.toggle(
+      "hidden",
+      !showPageHeader
+    );
+
+  }
 
   const pageTitle =
     $("pageTitle");
@@ -163,10 +197,6 @@ export function setView(view) {
 
   }
 
-
-  /* -------------------------
-     Update Subtitle
-  ------------------------- */
 
   const subtitle =
     $("subtitle");

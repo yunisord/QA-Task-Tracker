@@ -1615,7 +1615,13 @@ button {
   display: grid;
 
   grid-template-columns:
-    repeat(5, minmax(0, 1fr));
+    repeat(
+      auto-fit,
+      minmax(
+        180px,
+        1fr
+      )
+    );
 
   gap: 13px;
 
